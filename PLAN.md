@@ -29,13 +29,18 @@
 - 同步捲動可開關：設定 `novelTranslate.compareScrollSync.enabled`（預設 `true`），可透過指令「小說翻譯：切換原文／譯文同步捲動」(`novelTranslate.toggleScrollSync`)、比對視窗可見時出現的狀態列按鈕、或側邊欄「設置」View 裡的核取方塊切換（`src/views/settingsTreeProvider.ts`）
 - 已知限制：尚未處理原文/譯文段落數不一致時的語意對齊（paragraph mapping）——目前單純比對兩個檔案「行號相同」的那一行，如果原文/譯文沒有維持相同行數結構，對應的內容可能不是同一段落
 
-## Phase 3 — 名詞／片語（詞彙表）管理
+## Phase 3 — 名詞／片語（詞彙表）管理（已完成）
 
-- 設計 `.novel-translate/glossary.json` 格式：`{ term, translation, category, note }[]`
-- 「詞彙表」TreeView 改為讀取實際詞彙資料；提供新增/編輯/刪除詞條（QuickInput 表單）
-- `novel-translation` 語言的 `CompletionItemProvider`：真正讀取詞彙表，依游標前文比對原文詞彙給出譯名建議
-- 指令「切換翻譯自動完成模式」：在一般語言與 `novel-translation` 之間切換目前檔案的語言模式
-- 視需要重新評估 `editor.quickSuggestions` 的預設值（目前只關閉 `wordBasedSuggestions`）
+- 詞彙表改為**作品專屬**，直接存在 `.novel-translate/project.json` 內每個作品的 `glossary: GlossaryEntry[]`（`{ id, term, translation, category?, note? }`），不另開 `glossary.json`——理由是詞彙表跟章節一樣屬於單一作品的 metadata，沿用既有的 `ProjectStore` 讀寫邏輯最簡單；舊版 `project.json`（沒有 `glossary` 欄位）載入時會自動補 `[]`，相容既有資料
+- `ProjectStore` 新增 `addGlossaryEntry` / `updateGlossaryEntry` / `deleteGlossaryEntry` / `findChapterByTranslationUri`（後者讓自動完成能從譯文檔案的 Uri 反查回所屬作品）
+- 「詞彙表」TreeView（`src/views/glossaryTreeProvider.ts`）改為讀取實際資料，顯示作品 → 詞條，與「作品總管」的作品 → 章節結構對稱；指令：新增詞條（`novelTranslate.addGlossaryEntry`）、編輯詞條（`novelTranslate.editGlossaryEntry`，單擊詞條項目即觸發）、刪除詞條（`novelTranslate.deleteGlossaryEntry`，會跳確認對話框）、重新整理（`novelTranslate.refreshGlossary`）
+- 開啟比對框時，譯文檔案會被 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（`src/commands/compareCommands.ts`），這樣才會真正套用到 `configurationDefaults` 跟下面的自動完成
+- `GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `novel-translation` 語言：依譯文檔案 Uri 找出所屬作品，把該作品詞彙表的每一條都做成建議項目（`label` 是譯名，`filterText` 同時包含原文詞彙與譯名，讓打原文或譯名都能篩選到）
+- 指令「切換詞彙表自動完成模式」（`novelTranslate.toggleAutocompleteMode`，`src/commands/languageModeCommands.ts`）：在目前分頁的語言模式 `novel-translation` 與 `plaintext` 之間切換，給需要臨時關閉詞彙表建議（例如想用其他語言相關的擴充功能）的情境用
+- 已知限制：
+  - 自動完成的篩選完全交給 VSCode 內建 fuzzy matching，沒有針對 CJK 斷詞做特別處理，中文輸入時的篩選體驗可能不如預期精準
+  - 目前 `editor.quickSuggestions` 維持預設值（只關閉 `wordBasedSuggestions`），未來若發現自動彈出的時機不理想可再調整
+  - 詞彙表目前沒有匯入/匯出或跨作品共用的功能
 
 ## Phase 4 — 翻譯筆記（註解）
 
