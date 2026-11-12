@@ -43,6 +43,10 @@
       {
         "view": "novelTranslate.works",
         "contents": "尚未建立任何作品。\n[建立新作品](command:novelTranslate.createWork)"
+      },
+      {
+        "view": "novelTranslate.glossary",
+        "contents": "請先到「作品總管」建立作品，再回來這裡新增詞條。"
       }
     ],
     "commands": [
@@ -78,6 +82,33 @@
         "command": "novelTranslate.toggleScrollSync",
         "title": "小說翻譯：切換原文／譯文同步捲動",
         "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.refreshGlossary",
+        "title": "小說翻譯：重新整理詞彙表",
+        "category": "小說翻譯",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "novelTranslate.addGlossaryEntry",
+        "title": "小說翻譯：新增詞條",
+        "category": "小說翻譯",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "novelTranslate.editGlossaryEntry",
+        "title": "小說翻譯：編輯詞條",
+        "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.deleteGlossaryEntry",
+        "title": "小說翻譯：刪除詞條",
+        "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.toggleAutocompleteMode",
+        "title": "小說翻譯：切換詞彙表自動完成模式",
+        "category": "小說翻譯"
       }
     ],
     "menus": {
@@ -90,6 +121,11 @@
         {
           "command": "novelTranslate.refreshWorks",
           "when": "view == novelTranslate.works",
+          "group": "navigation"
+        },
+        {
+          "command": "novelTranslate.refreshGlossary",
+          "when": "view == novelTranslate.glossary",
           "group": "navigation"
         }
       ],
@@ -106,6 +142,19 @@
         {
           "command": "novelTranslate.openCompareView",
           "when": "view == novelTranslate.works && viewItem == novelTranslateChapter"
+        },
+        {
+          "command": "novelTranslate.addGlossaryEntry",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryWork",
+          "group": "inline"
+        },
+        {
+          "command": "novelTranslate.editGlossaryEntry",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryEntry"
+        },
+        {
+          "command": "novelTranslate.deleteGlossaryEntry",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryEntry"
         }
       ]
     },

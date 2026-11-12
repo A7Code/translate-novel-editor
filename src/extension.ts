@@ -1,18 +1,22 @@
 import * as vscode from "vscode";
 import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./views/workTreeProvider";
-import { GlossaryTreeProvider } from "./views/glossaryTreeProvider";
+import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./views/glossaryTreeProvider";
 import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareScrollSync } from "./services/compareScrollSync";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
 import { openCompareView } from "./commands/compareCommands";
+import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
+import { toggleAutocompleteMode } from "./commands/languageModeCommands";
+import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
+import { TRANSLATION_LANGUAGE_ID } from "./constants";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const projectStore = workspaceFolder ? new ProjectStore(workspaceFolder) : undefined;
 
   const workTreeProvider = new WorkTreeProvider(projectStore);
-  const glossaryTreeProvider = new GlossaryTreeProvider();
+  const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
   const settingsTreeProvider = new SettingsTreeProvider();
   const compareScrollSync = new CompareScrollSync();
 
@@ -49,7 +53,28 @@ export function activate(context: vscode.ExtensionContext) {
       openCompareView(projectStore, compareScrollSync, item?.chapter)
     ),
 
-    vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => compareScrollSync.toggle())
+    vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => compareScrollSync.toggle()),
+
+    vscode.commands.registerCommand("novelTranslate.refreshGlossary", () => glossaryTreeProvider.refresh()),
+
+    vscode.commands.registerCommand("novelTranslate.addGlossaryEntry", (item?: GlossaryWorkTreeItem) =>
+      addGlossaryEntry(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.editGlossaryEntry", (item?: GlossaryEntryTreeItem) =>
+      editGlossaryEntry(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.deleteGlossaryEntry", (item?: GlossaryEntryTreeItem) =>
+      deleteGlossaryEntry(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.toggleAutocompleteMode", () => toggleAutocompleteMode()),
+
+    vscode.languages.registerCompletionItemProvider(
+      { language: TRANSLATION_LANGUAGE_ID },
+      new GlossaryCompletionProvider(projectStore)
+    )
   );
 }
 
