@@ -9,23 +9,8 @@
 
 目前狀態：**Phase 0 — 基礎套件骨架**。側邊欄與指令已就位，實際業務邏輯尚未實作。
 
-## 開發方式
+## 文件
 
-```bash
-npm install
-```
-
-按 `F5` 啟動「Extension Development Host」，即可在新視窗的活動列看到「小說翻譯」圖示，側邊欄有「作品總管」與「詞彙表」兩個 View。
-
-其他指令：
-
-```bash
-npm run compile      # 使用 esbuild 打包一次
-npm run watch        # 監看並自動重新打包
-npm run check-types  # TypeScript 型別檢查
-npm run lint         # ESLint 檢查
-```
-
-## 發佈前待辦
-
-- `package.json` 的 `publisher` 欄位目前是 placeholder，正式發佈前需改成實際的 Marketplace publisher id。
+- 👤 一般使用者：安裝與操作教學請見 [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- 🛠️ 開發者：環境建置、打包發佈請見 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- 🗺️ 完整開發路線圖：[PLAN.md](PLAN.md)
