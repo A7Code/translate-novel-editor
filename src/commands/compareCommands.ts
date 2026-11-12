@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
 import { CompareScrollSync } from "../services/compareScrollSync";
 import { ChapterConfig } from "../types";
+import { TRANSLATION_LANGUAGE_ID } from "../constants";
 
 export async function openCompareView(
   store: ProjectStore | undefined,
@@ -28,7 +29,10 @@ export async function openCompareView(
   });
   await vscode.commands.executeCommand("workbench.action.files.setActiveEditorReadonlyInSession");
 
-  const translationDocument = await vscode.workspace.openTextDocument(translationUri);
+  let translationDocument = await vscode.workspace.openTextDocument(translationUri);
+  if (translationDocument.languageId !== TRANSLATION_LANGUAGE_ID) {
+    translationDocument = await vscode.languages.setTextDocumentLanguage(translationDocument, TRANSLATION_LANGUAGE_ID);
+  }
   await vscode.window.showTextDocument(translationDocument, {
     viewColumn: vscode.ViewColumn.Two,
     preview: false
