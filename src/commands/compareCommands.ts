@@ -1,38 +1,40 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
+import { CompareScrollSync } from "../services/compareScrollSync";
 import { ChapterConfig } from "../types";
-import { ChapterTreeItem } from "../views/workTreeProvider";
 
-let lockedScrollingEnabled = false;
-
-export async function openCompareView(store: ProjectStore | undefined, item?: ChapterTreeItem): Promise<void> {
+export async function openCompareView(
+  store: ProjectStore | undefined,
+  scrollSync: CompareScrollSync,
+  chapter?: ChapterConfig
+): Promise<void> {
   if (!store) {
     vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
     return;
   }
 
-  const chapter = item ? item.chapter : await pickChapter(store);
-  if (!chapter) {
+  const resolvedChapter = chapter ?? (await pickChapter(store));
+  if (!resolvedChapter) {
     return;
   }
 
-  const originalDocument = await vscode.workspace.openTextDocument(store.resolveUri(chapter.originalPath));
+  const originalUri = store.resolveUri(resolvedChapter.originalPath);
+  const translationUri = store.resolveUri(resolvedChapter.translationPath);
+
+  const originalDocument = await vscode.workspace.openTextDocument(originalUri);
   await vscode.window.showTextDocument(originalDocument, {
     viewColumn: vscode.ViewColumn.One,
     preview: false
   });
   await vscode.commands.executeCommand("workbench.action.files.setActiveEditorReadonlyInSession");
 
-  const translationDocument = await vscode.workspace.openTextDocument(store.resolveUri(chapter.translationPath));
+  const translationDocument = await vscode.workspace.openTextDocument(translationUri);
   await vscode.window.showTextDocument(translationDocument, {
     viewColumn: vscode.ViewColumn.Two,
     preview: false
   });
 
-  if (!lockedScrollingEnabled) {
-    await vscode.commands.executeCommand("workbench.action.toggleLockedScrolling");
-    lockedScrollingEnabled = true;
-  }
+  scrollSync.setPair(originalUri, translationUri);
 }
 
 async function pickChapter(store: ProjectStore): Promise<ChapterConfig | undefined> {
