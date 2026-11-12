@@ -4,6 +4,8 @@ import * as vscode from "vscode";
 const LINE_TOLERANCE = 1;
 // 單一次同步收到回音後，若還沒落在容許誤差內，最多再補發幾次請求（避免異常情況下無限重試）。
 const MAX_RETRIES = 3;
+// 控制同步捲動開關的設定鍵，預設開啟。
+export const SCROLL_SYNC_ENABLED_SETTING_KEY = "novelTranslate.compareScrollSync.enabled";
 
 interface InFlightReveal {
   requestedLine: number; // 實際送進 revealRange 的行數（已套用偏差校正）
@@ -14,7 +16,11 @@ interface InFlightReveal {
 export class CompareScrollSync implements vscode.Disposable {
   private originalUri: string | undefined;
   private translationUri: string | undefined;
+  private enabled: boolean;
+  private readonly statusBarItem: vscode.StatusBarItem;
   private readonly subscription: vscode.Disposable;
+  private readonly visibilitySubscription: vscode.Disposable;
+  private readonly configSubscription: vscode.Disposable;
   // 每個 uri 同時間最多只有一筆「尚未收到回音」的 revealRange 請求。
   private readonly inFlight = new Map<string, InFlightReveal>();
   // 回音抵達前，若又有更新的需求進來，先排隊，等回音處理完才套用最新值，
@@ -25,7 +31,19 @@ export class CompareScrollSync implements vscode.Disposable {
   private readonly bias = new Map<string, number>();
 
   constructor() {
+    this.enabled = this.readEnabledSetting();
+
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    this.statusBarItem.command = "novelTranslate.toggleScrollSync";
+    this.updateStatusBarText();
+
     this.subscription = vscode.window.onDidChangeTextEditorVisibleRanges((event) => this.handleChange(event));
+    this.visibilitySubscription = vscode.window.onDidChangeVisibleTextEditors(() => this.updateStatusBarVisibility());
+    this.configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY)) {
+        this.handleEnabledSettingChanged();
+      }
+    });
   }
 
   setPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
@@ -35,9 +53,55 @@ export class CompareScrollSync implements vscode.Disposable {
     this.queued.clear();
     this.bias.clear();
 
-    // 一開啟就先預熱偏差學習值，使用者不用先捲動個幾次「暖身」才會開始準確同步。
-    this.calibrate(this.originalUri);
-    this.calibrate(this.translationUri);
+    if (this.enabled) {
+      // 一開啟就先預熱偏差學習值，使用者不用先捲動個幾次「暖身」才會開始準確同步。
+      this.calibrate(this.originalUri);
+      this.calibrate(this.translationUri);
+    }
+
+    this.updateStatusBarVisibility();
+  }
+
+  // 使用者透過命令面板或狀態列按鈕切換同步捲動開關。
+  toggle(): void {
+    void vscode.workspace
+      .getConfiguration()
+      .update(SCROLL_SYNC_ENABLED_SETTING_KEY, !this.enabled, vscode.ConfigurationTarget.Global);
+  }
+
+  private readEnabledSetting(): boolean {
+    return vscode.workspace.getConfiguration().get<boolean>(SCROLL_SYNC_ENABLED_SETTING_KEY, true);
+  }
+
+  private handleEnabledSettingChanged(): void {
+    const wasEnabled = this.enabled;
+    this.enabled = this.readEnabledSetting();
+    this.updateStatusBarText();
+
+    if (this.enabled && !wasEnabled && this.originalUri && this.translationUri) {
+      // 從關閉切回開啟時，重新預熱偏差學習值，不用等使用者先捲動暖身。
+      this.calibrate(this.originalUri);
+      this.calibrate(this.translationUri);
+    }
+  }
+
+  private updateStatusBarText(): void {
+    this.statusBarItem.text = this.enabled ? "$(sync) 同步捲動：開" : "$(sync-ignored) 同步捲動：關";
+    this.statusBarItem.tooltip = "小說翻譯：點擊切換原文／譯文同步捲動";
+  }
+
+  // 只在原文／譯文其中一側正顯示於畫面上時才顯示狀態列按鈕，避免跟比對無關時也佔用狀態列。
+  private updateStatusBarVisibility(): void {
+    const pairUris = [this.originalUri, this.translationUri];
+    const isComparing = vscode.window.visibleTextEditors.some((editor) =>
+      pairUris.includes(editor.document.uri.toString())
+    );
+
+    if (isComparing) {
+      this.statusBarItem.show();
+    } else {
+      this.statusBarItem.hide();
+    }
   }
 
   // 刻意把畫面跳到遠離目前位置的探測行數，量出 revealRange(AtTop) 的實際落點偏差，
@@ -68,10 +132,13 @@ export class CompareScrollSync implements vscode.Disposable {
 
   dispose(): void {
     this.subscription.dispose();
+    this.visibilitySubscription.dispose();
+    this.configSubscription.dispose();
+    this.statusBarItem.dispose();
   }
 
   private handleChange(event: vscode.TextEditorVisibleRangesChangeEvent): void {
-    if (!this.originalUri || !this.translationUri) {
+    if (!this.enabled || !this.originalUri || !this.translationUri) {
       return;
     }
 

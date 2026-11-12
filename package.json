@@ -32,6 +32,10 @@
         {
           "id": "novelTranslate.glossary",
           "name": "詞彙表"
+        },
+        {
+          "id": "novelTranslate.settings",
+          "name": "設置"
         }
       ]
     },
@@ -68,6 +72,11 @@
       {
         "command": "novelTranslate.openCompareView",
         "title": "小說翻譯：開啟原文／譯文比對",
+        "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.toggleScrollSync",
+        "title": "小說翻譯：切換原文／譯文同步捲動",
         "category": "小說翻譯"
       }
     ],
@@ -113,6 +122,16 @@
     "configurationDefaults": {
       "[novel-translation]": {
         "editor.wordBasedSuggestions": "off"
+      }
+    },
+    "configuration": {
+      "title": "小說翻譯",
+      "properties": {
+        "novelTranslate.compareScrollSync.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，是否同步捲動兩側編輯器。"
+        }
       }
     }
   },
