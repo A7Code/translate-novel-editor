@@ -32,15 +32,18 @@
 ## Phase 3 — 名詞／片語（詞彙表）管理（已完成）
 
 - 詞彙表改為**作品專屬**，直接存在 `.novel-translate/project.json` 內每個作品的 `glossary: GlossaryEntry[]`（`{ id, term, translation, category?, note? }`），不另開 `glossary.json`——理由是詞彙表跟章節一樣屬於單一作品的 metadata，沿用既有的 `ProjectStore` 讀寫邏輯最簡單；舊版 `project.json`（沒有 `glossary` 欄位）載入時會自動補 `[]`，相容既有資料
-- `ProjectStore` 新增 `addGlossaryEntry` / `updateGlossaryEntry` / `deleteGlossaryEntry` / `findChapterByTranslationUri`（後者讓自動完成能從譯文檔案的 Uri 反查回所屬作品）
+- `ProjectStore` 新增 `addGlossaryEntry` / `updateGlossaryEntry` / `deleteGlossaryEntry` / `findGlossaryEntryByTerm`（依詞彙比對既有詞條）/ `findWorkIdForDocumentUri`（原文或譯文的 Uri 都能反查回所屬作品，供自動完成與指令判斷情境用）
 - 「詞彙表」TreeView（`src/views/glossaryTreeProvider.ts`）改為讀取實際資料，顯示作品 → 詞條，與「作品總管」的作品 → 章節結構對稱；指令：新增詞條（`novelTranslate.addGlossaryEntry`）、編輯詞條（`novelTranslate.editGlossaryEntry`，單擊詞條項目即觸發）、刪除詞條（`novelTranslate.deleteGlossaryEntry`，會跳確認對話框）、重新整理（`novelTranslate.refreshGlossary`）
-- 開啟比對框時，譯文檔案會被 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（`src/commands/compareCommands.ts`），這樣才會真正套用到 `configurationDefaults` 跟下面的自動完成
-- `GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `novel-translation` 語言：依譯文檔案 Uri 找出所屬作品，把該作品詞彙表的每一條都做成建議項目（`label` 是譯名，`filterText` 同時包含原文詞彙與譯名，讓打原文或譯名都能篩選到）
+- 新增/編輯/刪除詞條也支援直接從命令面板呼叫（不經由側邊欄項目）：會依目前作用中編輯器所屬的作品自動判斷情境（只有一個作品時直接用那個；否則嘗試從目前分頁反查，查不到才跳 QuickPick 選作品）；若編輯器裡有反白選取文字，會先查詢該詞彙是否已存在——存在就切到修改模式、不存在就以選取文字預填詞彙進入新增模式；修改/刪除在沒有反白時則跳出詞條清單讓使用者挑選（`src/commands/glossaryCommands.ts`）
+- 開啟比對框時，**原文與譯文**檔案都會被 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（`src/commands/compareCommands.ts`），是否套用由設定 `novelTranslate.glossaryAutocomplete.enabled`（預設 `true`）控制；切換此設定時會立即把目前所有已開啟、屬於某章節的分頁同步套用新的語言模式（`syncGlossaryAutocompleteLanguageMode`），不用等重新開比對框才生效
+- `GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `novel-translation` 語言：依文件 Uri 反查所屬作品，把該作品詞彙表的**每一條都做成兩個建議項目**（原文詞彙、譯名各一個，彼此的 `filterText` 都同時包含兩者，`detail` 顯示對應的另一邊），讓原文、譯文兩欄都能用原文或譯名篩選到建議
 - 指令「切換詞彙表自動完成模式」（`novelTranslate.toggleAutocompleteMode`，`src/commands/languageModeCommands.ts`）：在目前分頁的語言模式 `novel-translation` 與 `plaintext` 之間切換，給需要臨時關閉詞彙表建議（例如想用其他語言相關的擴充功能）的情境用
+- 側邊欄「設置」View（`src/views/settingsTreeProvider.ts`）新增「詞彙表自動完成模式」核取方塊，與設定值雙向同步
 - 已知限制：
   - 自動完成的篩選完全交給 VSCode 內建 fuzzy matching，沒有針對 CJK 斷詞做特別處理，中文輸入時的篩選體驗可能不如預期精準
   - 目前 `editor.quickSuggestions` 維持預設值（只關閉 `wordBasedSuggestions`），未來若發現自動彈出的時機不理想可再調整
   - 詞彙表目前沒有匯入/匯出或跨作品共用的功能
+  - `findGlossaryEntryByTerm` 是單一作品內依詞彙完全比對（忽略大小寫），沒有模糊比對
 
 ## Phase 4 — 翻譯筆記（註解）
 
