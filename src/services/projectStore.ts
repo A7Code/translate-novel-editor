@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { posix as posixPath } from "node:path";
 import { randomUUID } from "node:crypto";
-import { ChapterConfig, GlossaryEntry, ProjectConfig, WorkConfig } from "../types";
+import { ChapterConfig, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "../types";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
 
@@ -55,7 +55,12 @@ export class ProjectStore {
     return work;
   }
 
-  async addChapter(workId: string, title: string, originalContent = ""): Promise<ChapterConfig> {
+  async addChapter(
+    workId: string,
+    title: string,
+    originalContent = "",
+    epubContentPath?: string
+  ): Promise<ChapterConfig> {
     const config = await this.load();
     const work = this.findWork(config, workId);
 
@@ -67,7 +72,7 @@ export class ProjectStore {
     await this.writeTextFile(originalPath, originalContent);
     await this.writeTextFile(translationPath, "");
 
-    const chapter: ChapterConfig = { id: chapterId, title, originalPath, translationPath };
+    const chapter: ChapterConfig = { id: chapterId, title, originalPath, translationPath, epubContentPath };
     work.chapters.push(chapter);
     await this.save(config);
     return chapter;
@@ -148,6 +153,54 @@ export class ProjectStore {
     return work.glossary.find((candidate) => candidate.term.trim().toLowerCase() === normalized);
   }
 
+  async setEpubSource(workId: string, opfPath: string): Promise<EpubSourceInfo> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const epubSource: EpubSourceInfo = { packageDir: `.novel-translate/epub/${work.id}/package`, opfPath };
+    work.epubSource = epubSource;
+    await this.save(config);
+    return epubSource;
+  }
+
+  async writeEpubPackageFiles(workId: string, files: Map<string, Uint8Array>): Promise<void> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    if (!work.epubSource) {
+      throw new Error(`作品尚未設定 EPUB 來源：${workId}`);
+    }
+    for (const [relativePath, bytes] of files) {
+      await this.writeBinaryFile(`${work.epubSource.packageDir}/${relativePath}`, bytes);
+    }
+  }
+
+  async listEpubPackageFiles(workId: string): Promise<Map<string, Uint8Array>> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    if (!work.epubSource) {
+      throw new Error(`作品尚未設定 EPUB 來源：${workId}`);
+    }
+    const result = new Map<string, Uint8Array>();
+    await this.walkDirectory(this.resolveUri(work.epubSource.packageDir), "", result);
+    return result;
+  }
+
+  private async walkDirectory(
+    dirUri: vscode.Uri,
+    relativePrefix: string,
+    out: Map<string, Uint8Array>
+  ): Promise<void> {
+    const entries = await vscode.workspace.fs.readDirectory(dirUri);
+    for (const [name, type] of entries) {
+      const childUri = vscode.Uri.joinPath(dirUri, name);
+      const childRelative = relativePrefix ? `${relativePrefix}/${name}` : name;
+      if (type === vscode.FileType.Directory) {
+        await this.walkDirectory(childUri, childRelative, out);
+      } else {
+        out.set(childRelative, await vscode.workspace.fs.readFile(childUri));
+      }
+    }
+  }
+
   private findWork(config: ProjectConfig, workId: string): WorkConfig {
     const work = config.works.find((candidate) => candidate.id === workId);
     if (!work) {
@@ -157,9 +210,13 @@ export class ProjectStore {
   }
 
   private async writeTextFile(relativePath: string, content: string): Promise<void> {
+    await this.writeBinaryFile(relativePath, Buffer.from(content, "utf8"));
+  }
+
+  private async writeBinaryFile(relativePath: string, bytes: Uint8Array): Promise<void> {
     const dirUri = this.resolveUri(posixPath.dirname(relativePath));
     await vscode.workspace.fs.createDirectory(dirUri);
-    await vscode.workspace.fs.writeFile(this.resolveUri(relativePath), Buffer.from(content, "utf8"));
+    await vscode.workspace.fs.writeFile(this.resolveUri(relativePath), bytes);
   }
 
   private async save(config: ProjectConfig): Promise<void> {
