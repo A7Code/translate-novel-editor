@@ -49,6 +49,7 @@ src/
     projectStore.ts             # 讀寫 .novel-translate/project.json、建立成對原文/譯文純文字檔
   commands/
     workCommands.ts             # 建立作品、新增章節、匯入文字檔、開啟章節譯文的指令邏輯
+    compareCommands.ts          # 開啟原文／譯文雙欄比對（唯讀＋鎖定捲動）
   views/
     workTreeProvider.ts         # 「作品總管」View：讀取 ProjectStore 顯示作品 → 章節
     glossaryTreeProvider.ts     # 「詞彙表」View 的資料來源（目前回傳空陣列，Phase 3 才會實作）
@@ -65,7 +66,7 @@ resources/
 - `menus`：作品項目的右鍵選單（新增章節／匯入文字檔）、章節項目的右鍵選單（開啟比對）、View 標題列的建立作品／重新整理按鈕
 - `languages` / `configurationDefaults`：自訂語言模式 `novel-translation`，並關閉其 `editor.wordBasedSuggestions`，為後續詞彙表自動完成功能鋪路
 
-作品管理（Phase 1）已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openChapterTranslation` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`。`novelTranslate.openCompareView` 目前仍是 `showInformationMessage`（stub），對應 `PLAN.md` 的 Phase 2 尚未開工；多工作區資料夾僅取第一個（`workspaceFolders[0]`），這是目前已知的簡化限制。
+作品管理（Phase 1）與比對框（Phase 2）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openChapterTranslation`、`openCompareView` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`。`openCompareView` 依賴兩個內建指令：`workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀）與 `workbench.action.toggleLockedScrolling`（鎖定捲動，只在第一次呼叫時觸發一次，避免重複呼叫變成關閉）。多工作區資料夾僅取第一個（`workspaceFolders[0]`），這是目前已知的簡化限制。
 
 ## 打包發佈
 

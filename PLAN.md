@@ -18,12 +18,14 @@
 - 指令：新增作品（`novelTranslate.createWork`）、新增章節（`novelTranslate.addChapter`）、匯入現有文字檔為章節（`novelTranslate.importChapterFile`）、開啟章節譯文（`novelTranslate.openChapterTranslation`）、重新整理作品清單（`novelTranslate.refreshWorks`）
 - 已知限制：僅支援單一工作區資料夾（取 `workspaceFolders[0]`）；尚未提供刪除/重新命名作品或章節的指令，留待後續視需要補上
 
-## Phase 2 — 比對框（原文／譯文比對編輯）
+## Phase 2 — 比對框（原文／譯文比對編輯）（已完成）
 
-- `novelTranslate.openCompareView` 指令已接上章節選單（Phase 1），目前仍是顯示「即將推出」的 stub；這裡要補上真正邏輯
-- 於編輯器群組左右開啟原文（唯讀）與譯文（可編輯）
-- 套用 VSCode 內建「鎖定捲動」(Locked Scrolling) 功能做捲動同步
-- 若原文/譯文段落數不一致，於章節設定中記錄 paragraph mapping（預設 1:1）
+- `novelTranslate.openCompareView`（`src/commands/compareCommands.ts`）：從章節右鍵選單或命令面板（會先用 QuickPick 選作品→章節）開啟比對
+- 於編輯器群組左右開啟原文（`ViewColumn.One`）與譯文（`ViewColumn.Two`）；原文透過內建指令 `workbench.action.files.setActiveEditorReadonlyInSession` 設為本次 session 唯讀，不異動實際檔案權限
+- 套用 VSCode 內建「鎖定捲動」(`workbench.action.toggleLockedScrolling`) 做捲動同步；只在本次啟用期間第一次開比對框時觸發一次（避免重複觸發變成切換關閉）
+- 已知限制：
+  - 鎖定捲動是 VSCode 全域設定（影響所有可見的編輯器群組，不只我們開的兩欄），且若使用者自己手動關閉，套件不會自動重新開啟
+  - 尚未處理原文/譯文段落數不一致時的對齊問題（paragraph mapping），目前完全依賴兩個純文字檔本身的行數對應
 
 ## Phase 3 — 名詞／片語（詞彙表）管理
 
