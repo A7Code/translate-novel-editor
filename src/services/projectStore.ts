@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { posix as posixPath } from "node:path";
 import { randomUUID } from "node:crypto";
-import { ChapterConfig, ProjectConfig, WorkConfig } from "../types";
+import { ChapterConfig, GlossaryEntry, ProjectConfig, WorkConfig } from "../types";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
 
@@ -28,6 +28,9 @@ export class ProjectStore {
     } catch {
       this.cache = { version: 1, works: [] };
     }
+    for (const work of this.cache.works) {
+      work.glossary ??= [];
+    }
     return this.cache;
   }
 
@@ -44,7 +47,8 @@ export class ProjectStore {
       author: input.author,
       sourceLanguage: input.sourceLanguage,
       targetLanguage: input.targetLanguage,
-      chapters: []
+      chapters: [],
+      glossary: []
     };
     config.works.push(work);
     await this.save(config);
@@ -53,10 +57,7 @@ export class ProjectStore {
 
   async addChapter(workId: string, title: string, originalContent = ""): Promise<ChapterConfig> {
     const config = await this.load();
-    const work = config.works.find((candidate) => candidate.id === workId);
-    if (!work) {
-      throw new Error(`找不到作品：${workId}`);
-    }
+    const work = this.findWork(config, workId);
 
     const index = work.chapters.length + 1;
     const chapterId = `ch${String(index).padStart(2, "0")}`;
@@ -70,6 +71,74 @@ export class ProjectStore {
     work.chapters.push(chapter);
     await this.save(config);
     return chapter;
+  }
+
+  async addGlossaryEntry(
+    workId: string,
+    input: { term: string; translation: string; category?: string; note?: string }
+  ): Promise<GlossaryEntry> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+
+    const entry: GlossaryEntry = {
+      id: `term-${randomUUID().slice(0, 8)}`,
+      term: input.term,
+      translation: input.translation,
+      category: input.category,
+      note: input.note
+    };
+    work.glossary.push(entry);
+    await this.save(config);
+    return entry;
+  }
+
+  async updateGlossaryEntry(
+    workId: string,
+    entryId: string,
+    input: { term: string; translation: string; category?: string; note?: string }
+  ): Promise<GlossaryEntry> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const entry = work.glossary.find((candidate) => candidate.id === entryId);
+    if (!entry) {
+      throw new Error(`找不到詞條：${entryId}`);
+    }
+
+    entry.term = input.term;
+    entry.translation = input.translation;
+    entry.category = input.category;
+    entry.note = input.note;
+    await this.save(config);
+    return entry;
+  }
+
+  async deleteGlossaryEntry(workId: string, entryId: string): Promise<void> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    work.glossary = work.glossary.filter((candidate) => candidate.id !== entryId);
+    await this.save(config);
+  }
+
+  async findChapterByTranslationUri(
+    uri: vscode.Uri
+  ): Promise<{ workId: string; chapter: ChapterConfig } | undefined> {
+    const config = await this.load();
+    const target = uri.toString();
+    for (const work of config.works) {
+      const chapter = work.chapters.find((candidate) => this.resolveUri(candidate.translationPath).toString() === target);
+      if (chapter) {
+        return { workId: work.id, chapter };
+      }
+    }
+    return undefined;
+  }
+
+  private findWork(config: ProjectConfig, workId: string): WorkConfig {
+    const work = config.works.find((candidate) => candidate.id === workId);
+    if (!work) {
+      throw new Error(`找不到作品：${workId}`);
+    }
+    return work;
   }
 
   private async writeTextFile(relativePath: string, content: string): Promise<void> {

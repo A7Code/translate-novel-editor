@@ -5,6 +5,14 @@ export interface ChapterConfig {
   translationPath: string;
 }
 
+export interface GlossaryEntry {
+  id: string;
+  term: string;
+  translation: string;
+  category?: string;
+  note?: string;
+}
+
 export interface WorkConfig {
   id: string;
   title: string;
@@ -12,6 +20,7 @@ export interface WorkConfig {
   sourceLanguage?: string;
   targetLanguage?: string;
   chapters: ChapterConfig[];
+  glossary: GlossaryEntry[];
 }
 
 export interface ProjectConfig {
