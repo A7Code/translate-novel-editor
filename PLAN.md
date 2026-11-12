@@ -15,17 +15,17 @@
 - `.novel-translate/project.json` 專案設定格式：作品清單、每個作品的章節清單、原文/譯文路徑對應、來源與目標語言（`src/types.ts`、`src/services/projectStore.ts`）
 - 作品／章節採成對純文字檔儲存：`originals/<workId>/chXX.txt` 對 `translations/<workId>/chXX.txt`
 - 「作品總管」TreeView 改為讀取實際專案資料，顯示作品 → 章節（`src/views/workTreeProvider.ts`）
-- 指令：新增作品（`novelTranslate.createWork`）、新增章節（`novelTranslate.addChapter`）、匯入現有文字檔為章節（`novelTranslate.importChapterFile`）、開啟章節譯文（`novelTranslate.openChapterTranslation`）、重新整理作品清單（`novelTranslate.refreshWorks`）
+- 指令：新增作品（`novelTranslate.createWork`）、新增章節（`novelTranslate.addChapter`）、匯入現有文字檔為章節（`novelTranslate.importChapterFile`）、重新整理作品清單（`novelTranslate.refreshWorks`）
+- 作品總管中點擊章節項目會直接呼叫 `novelTranslate.openCompareView` 進入比對模式（見 Phase 2），不需要另外右鍵選擇指令；新增章節／匯入文字檔完成後也會自動開啟比對框
 - 已知限制：僅支援單一工作區資料夾（取 `workspaceFolders[0]`）；尚未提供刪除/重新命名作品或章節的指令，留待後續視需要補上
 
 ## Phase 2 — 比對框（原文／譯文比對編輯）（已完成）
 
-- `novelTranslate.openCompareView`（`src/commands/compareCommands.ts`）：從章節右鍵選單或命令面板（會先用 QuickPick 選作品→章節）開啟比對
+- `novelTranslate.openCompareView`（`src/commands/compareCommands.ts`）：點擊章節項目、右鍵選單、或命令面板（會先用 QuickPick 選作品→章節）都能開啟比對
 - 於編輯器群組左右開啟原文（`ViewColumn.One`）與譯文（`ViewColumn.Two`）；原文透過內建指令 `workbench.action.files.setActiveEditorReadonlyInSession` 設為本次 session 唯讀，不異動實際檔案權限
-- 套用 VSCode 內建「鎖定捲動」(`workbench.action.toggleLockedScrolling`) 做捲動同步；只在本次啟用期間第一次開比對框時觸發一次（避免重複觸發變成切換關閉）
-- 已知限制：
-  - 鎖定捲動是 VSCode 全域設定（影響所有可見的編輯器群組，不只我們開的兩欄），且若使用者自己手動關閉，套件不會自動重新開啟
-  - 尚未處理原文/譯文段落數不一致時的對齊問題（paragraph mapping），目前完全依賴兩個純文字檔本身的行數對應
+- 捲動同步改用自訂實作 `CompareScrollSync`（`src/services/compareScrollSync.ts`），監聽 `onDidChangeTextEditorVisibleRanges`，把來源編輯器目前最上面那一行的行號直接套用到另一側（`revealRange` + `AtTop`），讓兩欄的頂端行號盡可能一致
+  - **修正歷史**：最初採用 VSCode 內建「鎖定捲動」(`workbench.action.toggleLockedScrolling`)，但它是用絕對像素差值同步、不理解兩個檔案的行對應關係；原文/譯文長度不同或編輯造成捲動時，差值疊加很容易把另一邊頂到檔案底部（使用者回報「譯文換行，原文就跳到最後面」）。改成自己依「行號」同步後解決此問題，故已移除 `toggleLockedScrolling` 的呼叫
+- 已知限制：尚未處理原文/譯文段落數不一致時的語意對齊（paragraph mapping）——目前單純比對兩個檔案「行號相同」的那一行，如果原文/譯文沒有維持相同行數結構，對應的內容可能不是同一段落
 
 ## Phase 3 — 名詞／片語（詞彙表）管理
 
