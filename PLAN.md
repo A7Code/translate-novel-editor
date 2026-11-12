@@ -25,6 +25,8 @@
 - 於編輯器群組左右開啟原文（`ViewColumn.One`）與譯文（`ViewColumn.Two`）；原文透過內建指令 `workbench.action.files.setActiveEditorReadonlyInSession` 設為本次 session 唯讀，不異動實際檔案權限
 - 捲動同步改用自訂實作 `CompareScrollSync`（`src/services/compareScrollSync.ts`），監聽 `onDidChangeTextEditorVisibleRanges`，把來源編輯器目前最上面那一行的行號直接套用到另一側（`revealRange` + `AtTop`），讓兩欄的頂端行號盡可能一致
   - **修正歷史**：最初採用 VSCode 內建「鎖定捲動」(`workbench.action.toggleLockedScrolling`)，但它是用絕對像素差值同步、不理解兩個檔案的行對應關係；原文/譯文長度不同或編輯造成捲動時，差值疊加很容易把另一邊頂到檔案底部（使用者回報「譯文換行，原文就跳到最後面」）。改成自己依「行號」同步後解決此問題，故已移除 `toggleLockedScrolling` 的呼叫
+  - **再修正**：`revealRange(AtTop)` 的實際落點不保證精確對齊要求的行數，連續捲動時重疊的請求還會互相干擾造成誤判、甚至卡死。改為每個檔案同時只送出一筆待回應的 `revealRange` 請求（多餘需求先排隊），並持續學習「要求行數／實際落點」的偏差值來校正下一次請求；開啟比對視窗時也會先做一次無感的校正探測，不用使用者先手動捲動暖身
+- 同步捲動可開關：設定 `novelTranslate.compareScrollSync.enabled`（預設 `true`），可透過指令「小說翻譯：切換原文／譯文同步捲動」(`novelTranslate.toggleScrollSync`)、比對視窗可見時出現的狀態列按鈕、或側邊欄「設置」View 裡的核取方塊切換（`src/views/settingsTreeProvider.ts`）
 - 已知限制：尚未處理原文/譯文段落數不一致時的語意對齊（paragraph mapping）——目前單純比對兩個檔案「行號相同」的那一行，如果原文/譯文沒有維持相同行數結構，對應的內容可能不是同一段落
 
 ## Phase 3 — 名詞／片語（詞彙表）管理

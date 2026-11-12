@@ -23,7 +23,7 @@ npm install
 
 本倉庫（`translate_novel_editor/`）巢狀在實際的 VSCode 工作區資料夾 `c:/A7WorkForm/translate_novel_editor/` 裡面一層。偵錯用的 `.vscode/launch.json`、`tasks.json` 放在**外層**工作區資料夾，不屬於本倉庫管理範圍；`launch.json` 的「執行擴充功能」設定會把 `extensionDevelopmentPath` 指到 `${workspaceFolder}/translate_novel_editor`。
 
-因此要偵錯時，請在 VSCode 開啟外層資料夾 `c:/A7WorkForm/translate_novel_editor`（而不是直接開本倉庫），再按 `F5`（或在「執行與偵錯」面板選擇對應設定）啟動「Extension Development Host」。VSCode 會開啟一個新視窗，在該視窗的活動列可看到「小說翻譯」圖示，側邊欄會載入「作品總管」與「詞彙表」兩個 View。
+因此要偵錯時，請在 VSCode 開啟外層資料夾 `c:/A7WorkForm/translate_novel_editor`（而不是直接開本倉庫），再按 `F5`（或在「執行與偵錯」面板選擇對應設定）啟動「Extension Development Host」。VSCode 會開啟一個新視窗，在該視窗的活動列可看到「小說翻譯」圖示，側邊欄會載入「作品總管」「詞彙表」「設置」三個 View。
 
 修改原始碼後，若搭配外層工作區的「Watch (compile on save)」背景工作（對應本倉庫的 `npm run watch`）自動重新打包，在 Development Host 視窗按 `Ctrl+R`（重新載入視窗）即可套用變更，不需每次重新按 `F5`。
 
@@ -54,6 +54,7 @@ src/
   views/
     workTreeProvider.ts         # 「作品總管」View：讀取 ProjectStore 顯示作品 → 章節
     glossaryTreeProvider.ts     # 「詞彙表」View 的資料來源（目前回傳空陣列，Phase 3 才會實作）
+    settingsTreeProvider.ts     # 「設置」View：目前只有一個同步捲動開關的核取方塊項目
 resources/
   icon.svg                      # Activity Bar 圖示
 ```
@@ -61,13 +62,18 @@ resources/
 `package.json` 的 `contributes` 區塊定義了：
 
 - `viewsContainers.activitybar`：側邊欄容器「小說翻譯」
-- `views.novelTranslate`：兩個 View（`novelTranslate.works`、`novelTranslate.glossary`）
+- `views.novelTranslate`：三個 View（`novelTranslate.works`、`novelTranslate.glossary`、`novelTranslate.settings`）
 - `viewsWelcome`：作品總管在無資料時顯示的提示文字
-- `commands`：`novelTranslate.createWork`、`novelTranslate.addChapter`、`novelTranslate.importChapterFile`、`novelTranslate.refreshWorks`、`novelTranslate.openCompareView`
+- `commands`：`novelTranslate.createWork`、`novelTranslate.addChapter`、`novelTranslate.importChapterFile`、`novelTranslate.refreshWorks`、`novelTranslate.openCompareView`、`novelTranslate.toggleScrollSync`
 - `menus`：作品項目的右鍵選單（新增章節／匯入文字檔）、章節項目的右鍵選單（開啟比對，與單擊章節項目相同效果）、View 標題列的建立作品／重新整理按鈕
 - `languages` / `configurationDefaults`：自訂語言模式 `novel-translation`，並關閉其 `editor.wordBasedSuggestions`，為後續詞彙表自動完成功能鋪路
+- `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器
 
-作品管理（Phase 1）與比對框（Phase 2）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView` 依賴內建指令 `workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀），捲動同步則是 `CompareScrollSync`（`src/services/compareScrollSync.ts`）自行監聽 `onDidChangeTextEditorVisibleRanges` 並用 `revealRange` 對齊行號，**不再使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。多工作區資料夾僅取第一個（`workspaceFolders[0]`），這是目前已知的簡化限制。
+作品管理（Phase 1）與比對框（Phase 2）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView` 依賴內建指令 `workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀），捲動同步則是 `CompareScrollSync`（`src/services/compareScrollSync.ts`）自行監聽 `onDidChangeTextEditorVisibleRanges` 並用 `revealRange` 對齊行號，**不再使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。
+
+`CompareScrollSync` 內部用「每個 uri 同時最多一筆待回應的 `revealRange` 請求＋排隊＋落點偏差學習」來處理 `revealRange(AtTop)` 實際落點與要求行數不保證精確對齊、連續捲動時請求互相干擾的問題；是否啟用由設定 `novelTranslate.compareScrollSync.enabled` 控制，可透過 `novelTranslate.toggleScrollSync` 指令、比對視窗可見時顯示的狀態列項目、或 `SettingsTreeProvider`（`src/views/settingsTreeProvider.ts`，掛在「設置」View、用 `TreeItem.checkboxState` + `TreeView.onDidChangeCheckboxState` 實作核取方塊）三種 UI 入口切換，彼此透過 `onDidChangeConfiguration` 保持同步。
+
+多工作區資料夾僅取第一個（`workspaceFolders[0]`），這是目前已知的簡化限制。
 
 ## 打包發佈
 
