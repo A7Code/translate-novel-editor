@@ -27,3 +27,19 @@ export interface ProjectConfig {
   version: 1;
   works: WorkConfig[];
 }
+
+export interface CommentData {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface CommentThreadData {
+  id: string;
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  resolved: boolean;
+  comments: CommentData[];
+}

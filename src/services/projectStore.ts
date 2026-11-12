@@ -120,16 +120,22 @@ export class ProjectStore {
   }
 
   async findWorkIdForDocumentUri(uri: vscode.Uri): Promise<string | undefined> {
+    return (await this.findChapterForDocumentUri(uri))?.workId;
+  }
+
+  async findChapterForDocumentUri(
+    uri: vscode.Uri
+  ): Promise<{ workId: string; chapter: ChapterConfig; relativePath: string } | undefined> {
     const config = await this.load();
     const target = uri.toString();
     for (const work of config.works) {
-      const chapter = work.chapters.find(
-        (candidate) =>
-          this.resolveUri(candidate.originalPath).toString() === target ||
-          this.resolveUri(candidate.translationPath).toString() === target
-      );
-      if (chapter) {
-        return work.id;
+      for (const chapter of work.chapters) {
+        if (this.resolveUri(chapter.originalPath).toString() === target) {
+          return { workId: work.id, chapter, relativePath: chapter.originalPath };
+        }
+        if (this.resolveUri(chapter.translationPath).toString() === target) {
+          return { workId: work.id, chapter, relativePath: chapter.translationPath };
+        }
       }
     }
     return undefined;
