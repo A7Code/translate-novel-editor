@@ -1,10 +1,16 @@
 {
   "name": "novel-translate-editor",
   "displayName": "小說翻譯編輯器",
-  "description": "輔助小說翻譯工作的 VSCode 套件：作品管理、原文／譯文比對、詞彙表自動完成、翻譯註解。",
-  "version": "0.0.1",
-  "publisher": "your-publisher-id",
+  "description": "輔助小說翻譯工作的 VSCode 套件：作品管理、原文／譯文比對、詞彙表自動完成、翻譯註解、EPUB 匯入／匯出。",
+  "version": "0.1.0",
+  "publisher": "a7code",
   "private": true,
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/A7Code/translate-novel-editor.git"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
   },

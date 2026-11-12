@@ -114,8 +114,16 @@ npm run package-vsix
 
 ### 發佈前待辦
 
-- `package.json` 的 `publisher` 欄位目前是 placeholder（`your-publisher-id`），正式發佈到 Marketplace 前需改成實際的 publisher id。
-- 其餘打包發佈相關的收尾事項見 `PLAN.md` 的 Phase 6。
+- 目前僅規劃產出 `.vsix` 供個人安裝使用，不上傳到 Marketplace，因此 `package.json` 保留 `"private": true`（`vsce publish` 會因此直接拒絕執行，避免手滑誤發佈）。`publisher` 欄位填入 `a7code`，若日後真的要發佈到 Marketplace，需先在 https://marketplace.visualstudio.com/manage 註冊對應的 publisher 帳號，並移除 `private` 欄位。
+- Phase 6 其餘收尾項目（icon、LICENSE、repository、README/CHANGELOG）已完成，見 `PLAN.md` 的 Phase 6。
+
+### 安裝 .vsix
+
+打包完成後，在 VSCode 的擴充功能面板點右上角「...」→「從 VSIX 安裝...」，選擇 `releases/` 底下產生的 `.vsix` 檔即可；或用指令列：
+
+```bash
+code --install-extension releases/novel-translate-editor-0.1.0.vsix
+```
 
 ## 路線圖
 

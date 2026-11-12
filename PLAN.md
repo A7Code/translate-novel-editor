@@ -76,7 +76,14 @@
   - 匯出只能針對「從 EPUB 匯入」的作品；純文字建立的作品沒有排版樣板可還原，不提供匯出成 EPUB 的功能
   - 不支援把後續用「新增章節」手動加的額外章節一併排進匯出的 spine（這些章節沒有 `epubContentPath`，匯出時會被忽略）
 
-## Phase 6 — 打包發佈
+## Phase 6 — 打包發佈（已完成）
 
-- `vsce package`、正式 icon、README/CHANGELOG 完整化
-- 填入正式 `publisher` 並視需要調整 `name`/`displayName`
+- 新增正式方型圖示 `resources/icon.png`（128×128，書本雙頁對照意象，橘色原文頁／藍色譯文頁）供 `package.json` 的 `icon` 欄位與 Marketplace 商店頁面使用；因為環境內沒有任何 SVG→PNG 的轉檔工具（無 sharp、無 ImageMagick、無 rsvg-convert，ffmpeg 雖有 `svg_pipe` demuxer 但沒編譯 SVG decoder），改用純 Node.js 腳本手刻光柵化＋PNG 編碼：用簡單幾何測試（圓角矩形／矩形 contains）在 4x4 超取樣網格上逐像素判斷顏色，再做 box filter 降採樣做反鋸齒，最後用 `zlib.deflateSync` 壓縮掃描線、手動組 PNG 的 `IHDR`/`IDAT`/`IEND` chunk（`zlib.crc32` 算每個 chunk 的 CRC，Node 21+ 內建）；原本做活動列圖示用的 24x24 線稿 `resources/icon.svg` 維持不變，兩個圖示用途不同（一個是側邊欄小圖示、一個是商店用的方形圖示），不合併
+- `package.json` 補上 `icon`（`resources/icon.png`）、`repository`（指向既有的 GitHub remote `A7Code/translate-novel-editor`）、`license: "MIT"`；`publisher` 從 placeholder `your-publisher-id` 改成 `a7code`；`version` 由 `0.0.1` 提升到 `0.1.0`（代表 Phase 0～5 全部完成的首個功能完整版本）
+- 新增 `LICENSE`（MIT，著作權人 A7Code）
+- 保留 `"private": true`——目前只規劃產出 `.vsix` 供個人安裝，不上傳 Marketplace；這個欄位會讓 `vsce publish` 直接拒絕執行，避免日後手滑誤發佈到公開商店。真要發佈時需先到 Marketplace 註冊 `a7code` 這個 publisher 帳號、移除此欄位
+- `README.md` 更新過時的「目前狀態：Phase 0」說明（已反映 Phase 0～5 全部完成），新增授權區塊連回 `LICENSE`；`CHANGELOG.md` 把累積的 `[Unreleased]` 項目收斂成正式的 `[0.1.0] - 2026-11-12` 版本
+- 用 `npx vsce package -o releases/` 實際跑過打包，確認輸出的 `.vsix` 內容正確（含 `dist/extension.js`、`package.json`、`readme.md`、`changelog.md`、`docs/`、`resources/icon.svg`），且 `repository`/`LICENSE`/icon 齊備後不再出現先前的 missing-repository、missing-license 警告
+- 已知限制：
+  - `publisher: "a7code"` 只是為了讓 `package.json` 不再是 placeholder、且打包/日後若要發佈時語意正確，並未實際在 Marketplace 註冊此帳號——目前就只是本機打包用的識別碼，不影響 `.vsix` 的產生或本機安裝
+  - `resources/icon.png` 是用手刻光柵化／PNG 編碼器產生，不是向量圖庫或設計軟體輸出，若未來想要更精緻的視覺（漸層、陰影等）建議改用真正的設計工具重新產出
