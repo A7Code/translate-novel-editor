@@ -3,6 +3,7 @@ import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./views/workTre
 import { GlossaryTreeProvider } from "./views/glossaryTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { addChapter, createWork, importChapterFile, openChapterTranslation } from "./commands/workCommands";
+import { openCompareView } from "./commands/compareCommands";
 import { ChapterConfig } from "./types";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -32,12 +33,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
 
-    vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) => {
-      const title = item?.chapter.title;
-      vscode.window.showInformationMessage(
-        title ? `「${title}」的原文／譯文比對功能將於後續版本推出。` : "原文／譯文比對功能將於後續版本推出。"
-      );
-    })
+    vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
+      openCompareView(projectStore, item)
+    )
   );
 }
 
