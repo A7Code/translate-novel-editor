@@ -9,6 +9,7 @@ import { openCompareView, syncGlossaryAutocompleteLanguageMode } from "./command
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
+import { NovelCommentController } from "./services/novelCommentController";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -19,6 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
   const settingsTreeProvider = new SettingsTreeProvider();
   const compareScrollSync = new CompareScrollSync();
+  const commentController = new NovelCommentController(projectStore);
 
   const settingsTreeView = vscode.window.createTreeView("novelTranslate.settings", {
     treeDataProvider: settingsTreeProvider
@@ -26,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     compareScrollSync,
+    commentController,
     settingsTreeProvider,
     settingsTreeView,
     settingsTreeView.onDidChangeCheckboxState((event) => {
@@ -80,6 +83,18 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerCompletionItemProvider(
       { language: TRANSLATION_LANGUAGE_ID },
       new GlossaryCompletionProvider(projectStore)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.submitComment", (reply: vscode.CommentReply) =>
+      commentController.submitComment(reply)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.toggleCommentResolved", (thread: vscode.CommentThread) =>
+      commentController.toggleResolved(thread)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.deleteCommentThread", (thread: vscode.CommentThread) =>
+      commentController.deleteThread(thread)
     )
   );
 

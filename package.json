@@ -109,6 +109,24 @@
         "command": "novelTranslate.toggleAutocompleteMode",
         "title": "小說翻譯：切換詞彙表自動完成模式",
         "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.submitComment",
+        "title": "送出",
+        "category": "小說翻譯",
+        "enablement": "!commentIsEmpty"
+      },
+      {
+        "command": "novelTranslate.toggleCommentResolved",
+        "title": "切換已解決／待確認",
+        "category": "小說翻譯",
+        "icon": "$(check)"
+      },
+      {
+        "command": "novelTranslate.deleteCommentThread",
+        "title": "刪除討論串",
+        "category": "小說翻譯",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -155,6 +173,25 @@
         {
           "command": "novelTranslate.deleteGlossaryEntry",
           "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryEntry"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "novelTranslate.submitComment",
+          "group": "inline",
+          "when": "commentController == novelTranslate.notes"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "novelTranslate.toggleCommentResolved",
+          "group": "navigation",
+          "when": "commentController == novelTranslate.notes"
+        },
+        {
+          "command": "novelTranslate.deleteCommentThread",
+          "group": "navigation",
+          "when": "commentController == novelTranslate.notes"
         }
       ]
     },
