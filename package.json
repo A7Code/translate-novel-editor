@@ -127,6 +127,18 @@
         "title": "刪除討論串",
         "category": "小說翻譯",
         "icon": "$(trash)"
+      },
+      {
+        "command": "novelTranslate.importEpub",
+        "title": "小說翻譯：匯入 EPUB",
+        "category": "小說翻譯",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "novelTranslate.exportEpub",
+        "title": "小說翻譯：匯出為 EPUB",
+        "category": "小說翻譯",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
@@ -145,17 +157,26 @@
           "command": "novelTranslate.refreshGlossary",
           "when": "view == novelTranslate.glossary",
           "group": "navigation"
+        },
+        {
+          "command": "novelTranslate.importEpub",
+          "when": "view == novelTranslate.works",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "novelTranslate.addChapter",
-          "when": "view == novelTranslate.works && viewItem == novelTranslateWork",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/",
           "group": "inline"
         },
         {
           "command": "novelTranslate.importChapterFile",
-          "when": "view == novelTranslate.works && viewItem == novelTranslateWork"
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/"
+        },
+        {
+          "command": "novelTranslate.exportEpub",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateWork-epub"
         },
         {
           "command": "novelTranslate.openCompareView",
@@ -248,5 +269,9 @@
     "eslint": "^9.9.0",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.0.0"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "jszip": "^3.10.2"
   }
 }

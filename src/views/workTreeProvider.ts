@@ -6,7 +6,7 @@ export class WorkTreeItem extends vscode.TreeItem {
   constructor(public readonly work: WorkConfig) {
     super(work.title, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = work.id;
-    this.contextValue = "novelTranslateWork";
+    this.contextValue = work.epubSource ? "novelTranslateWork-epub" : "novelTranslateWork";
     this.description = work.author;
     this.tooltip = work.author ? `${work.title} — ${work.author}` : work.title;
     this.iconPath = new vscode.ThemeIcon("book");

@@ -10,6 +10,7 @@ import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./comm
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
 import { NovelCommentController } from "./services/novelCommentController";
+import { exportEpub, importEpub } from "./commands/epubCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -95,6 +96,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.deleteCommentThread", (thread: vscode.CommentThread) =>
       commentController.deleteThread(thread)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.importEpub", () => importEpub(projectStore, workTreeProvider)),
+
+    vscode.commands.registerCommand("novelTranslate.exportEpub", (item?: WorkTreeItem) =>
+      exportEpub(projectStore, item)
     )
   );
 
