@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Phase 4：翻譯筆記。用 VSCode 原生 Comments API 在原文／譯文檔案上留言討論串，資料持久化在 `.novel-translate/comments/<workId>/<chapterId>.json`；可切換「待確認／已解決」狀態、刪除整個討論串。
 - 新增：「詞彙表自動完成模式」設定 `novelTranslate.glossaryAutocomplete.enabled`（預設開啟），控制開啟比對畫面時是否自動套用詞彙表自動完成語言模式；側邊欄「設置」View 新增對應的核取方塊，可直接勾選/取消勾選。
 - 修正：上述核取方塊原本只影響「之後新開啟」的比對畫面，對目前已開啟的分頁沒有任何作用，看起來像設定沒生效。現在切換核取方塊會立即把所有已開啟、屬於某個章節的原文／譯文分頁同步套用或移除 `novel-translation` 語言模式；套件啟動時也會依目前設定值做一次校正。
 - 修正：詞彙表自動完成原本只掛在譯文欄位、且只能補出譯名。現在原文欄位（解除唯讀後）也會套用 `novel-translation` 語言模式並掛上同一個 `GlossaryCompletionProvider`；不論在原文或譯文欄位打字，只要符合某個詞條的原文或譯名，自動完成清單都會同時列出該詞條的「原文」與「譯名」兩個候選項。

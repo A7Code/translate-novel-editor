@@ -49,6 +49,8 @@ src/
   services/
     projectStore.ts             # 讀寫 .novel-translate/project.json、建立成對原文/譯文純文字檔、詞彙表 CRUD
     compareScrollSync.ts        # 比對框雙欄的捲動同步（依行號對齊，取代內建鎖定捲動）
+    commentStore.ts             # 讀寫 .novel-translate/comments/<workId>/<chapterId>.json
+    novelCommentController.ts   # 包裝 vscode.CommentController，管理翻譯筆記討論串的建立/還原/持久化
   commands/
     workCommands.ts             # 建立作品、新增章節、匯入文字檔的指令邏輯
     compareCommands.ts          # 開啟原文／譯文雙欄比對（原文唯讀＋行號同步捲動＋兩側都設定為 novel-translation 語言模式）
@@ -69,8 +71,8 @@ resources/
 - `viewsContainers.activitybar`：側邊欄容器「小說翻譯」
 - `views.novelTranslate`：三個 View（`novelTranslate.works`、`novelTranslate.glossary`、`novelTranslate.settings`）
 - `viewsWelcome`：作品總管在無資料時顯示的提示文字
-- `commands`：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`refreshWorks`、`openCompareView`、`toggleScrollSync`、`refreshGlossary`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry`、`toggleAutocompleteMode`
-- `menus`：作品項目的右鍵選單（新增章節／匯入文字檔）、章節項目的右鍵選單（開啟比對，與單擊章節項目相同效果）、詞彙表作品項目的右鍵選單（新增詞條）、詞條項目的右鍵選單（編輯／刪除）、兩個 View 標題列各自的重新整理按鈕
+- `commands`：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`refreshWorks`、`openCompareView`、`toggleScrollSync`、`refreshGlossary`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry`、`toggleAutocompleteMode`、`submitComment`、`toggleCommentResolved`、`deleteCommentThread`
+- `menus`：作品項目的右鍵選單（新增章節／匯入文字檔）、章節項目的右鍵選單（開啟比對，與單擊章節項目相同效果）、詞彙表作品項目的右鍵選單（新增詞條）、詞條項目的右鍵選單（編輯／刪除）、兩個 View 標題列各自的重新整理按鈕、`comments/commentThread/context`（送出留言的 inline 按鈕）、`comments/commentThread/title`（切換已解決／刪除討論串）
 - `languages` / `configurationDefaults`：自訂語言模式 `novel-translation`，並關閉其 `editor.wordBasedSuggestions`，讓詞彙表自動完成跟一般聯想雜訊分流
 - `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器；`novelTranslate.glossaryAutocomplete.enabled`（boolean，預設 `true`）——開啟比對畫面時是否自動把原文／譯文都設為 `novel-translation` 語言模式（詞彙表自動完成）
 
@@ -78,7 +80,16 @@ resources/
 
 `CompareScrollSync` 內部用「每個 uri 同時最多一筆待回應的 `revealRange` 請求＋排隊＋落點偏差學習」來處理 `revealRange(AtTop)` 實際落點與要求行數不保證精確對齊、連續捲動時請求互相干擾的問題；是否啟用由設定 `novelTranslate.compareScrollSync.enabled` 控制，可透過 `novelTranslate.toggleScrollSync` 指令、比對視窗可見時顯示的狀態列項目、或 `SettingsTreeProvider`（`src/views/settingsTreeProvider.ts`，掛在「設置」View、用 `TreeItem.checkboxState` + `TreeView.onDidChangeCheckboxState` 實作核取方塊）三種 UI 入口切換，彼此透過 `onDidChangeConfiguration` 保持同步。
 
-`GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `{ language: TRANSLATION_LANGUAGE_ID }`：拿到譯文文件後先用 `ProjectStore.findChapterByTranslationUri` 反查所屬作品，再把該作品的 `glossary` 整批轉成 `CompletionItem`（`label` 為譯名，`filterText` 同時含原文詞彙與譯名）。`novelTranslate.toggleAutocompleteMode`（`src/commands/languageModeCommands.ts`）則是在目前分頁的語言模式 `novel-translation` 與 `plaintext` 間切換，供需要臨時關閉詞彙表建議時使用。
+`GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `{ language: TRANSLATION_LANGUAGE_ID }`：拿到文件後先用 `ProjectStore.findWorkIdForDocumentUri` 反查所屬作品，再把該作品的 `glossary` 整批轉成 `CompletionItem`（每個詞條各給原文、譯名兩個候選項，`filterText` 同時含兩者）。`novelTranslate.toggleAutocompleteMode`（`src/commands/languageModeCommands.ts`）則是在目前分頁的語言模式 `novel-translation` 與 `plaintext` 間切換，供需要臨時關閉詞彙表建議時使用。
+
+`NovelCommentController`（`src/services/novelCommentController.ts`）包裝 `vscode.comments.createCommentController`，實作翻譯筆記（Phase 4）：
+
+- `commentingRangeProvider` 用 `ProjectStore.findChapterForDocumentUri` 判斷文件是否屬於某個章節，只有章節的原文/譯文檔案才會出現留言「+」affordance
+- 每個文件第一次被開啟（`onDidOpenTextDocument`）時，從 `CommentStore`（`src/services/commentStore.ts`，讀寫 `.novel-translate/comments/<workId>/<chapterId>.json`）載入屬於它那一側（`relativePath` 比對 `originalPath`/`translationPath`）的討論串資料，用 `controller.createCommentThread` 還原成真正的 `vscode.CommentThread`；文件關閉（`onDidCloseTextDocument`）時把對應的 thread 物件 dispose 掉，避免殘留
+- 用兩個 `Map` 追蹤執行期狀態：`threadMeta`（`CommentThread → {id, workId, chapterId, relativePath}`，因為 `vscode.Comment`/`CommentThread` 本身不會記住我們自訂的 id）與 `chapterThreads`（`"workId/chapterId" → Set<CommentThread>`，持久化時用來蒐集同一章節所有存活的討論串）
+- 新增留言（`novelTranslate.submitComment`，對應 `comments/commentThread/context` 的 inline 按鈕）：若 `reply.thread` 還沒在 `threadMeta` 裡（代表是使用者點「+」新建立的討論串），先反查所屬作品／章節並註冊；每次送出都會把整個章節目前所有存活討論串重新序列化寫回同一個 JSON 檔（`persistChapter`），沒有做差異化增量寫入
+- 「待確認／已解決」直接對應 `vscode.CommentThreadState.Unresolved`/`Resolved`（`novelTranslate.toggleCommentResolved`）；「刪除討論串」（`novelTranslate.deleteCommentThread`）會把 thread 從追蹤 Map 移除、`dispose()`，再重新寫回持久化檔案
+- 作者名稱固定用 `os.userInfo().username`（取不到就用「我」），沒有身分切換機制
 
 多工作區資料夾僅取第一個（`workspaceFolders[0]`），這是目前已知的簡化限制。
 

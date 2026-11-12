@@ -45,11 +45,16 @@
   - 詞彙表目前沒有匯入/匯出或跨作品共用的功能
   - `findGlossaryEntryByTerm` 是單一作品內依詞彙完全比對（忽略大小寫），沒有模糊比對
 
-## Phase 4 — 翻譯筆記（註解）
+## Phase 4 — 翻譯筆記（註解）（已完成）
 
-- 使用 `vscode.comments.createCommentController` 實作留言討論串
-- 留言資料持久化：`.novel-translate/comments/<chapter-id>.json`
-- 支援標記「待確認」、「已解決」狀態
+- `NovelCommentController`（`src/services/novelCommentController.ts`）用 `vscode.comments.createCommentController` 實作留言討論串，掛在原文與譯文檔案上都可以留言
+- `commentingRangeProvider` 依 `ProjectStore.findChapterForDocumentUri` 判斷目前文件是否屬於某個章節，是才顯示「+」留言按鈕（無關的檔案不會出現）
+- 留言資料持久化在 `.novel-translate/comments/<workId>/<chapterId>.json`（`CommentThreadData[]`，每筆含 `relativePath` 標記是原文還是譯文側、`startLine`/`endLine`、`resolved`、`comments: CommentData[]`）；開啟一個檔案時會把屬於它的討論串從檔案還原成真正的 `vscode.CommentThread`，任何新增留言／切換狀態／刪除討論串都會把該章節目前所有存活的討論串重新整批寫回同一個檔案
+- 待確認／已解決直接對應 VSCode 原生的 `CommentThreadState.Unresolved` / `Resolved`，透過討論串標題列的「切換已解決／待確認」指令切換（`novelTranslate.toggleCommentResolved`）；另外提供「刪除討論串」(`novelTranslate.deleteCommentThread`)
+- 已知限制：
+  - 留言的行號定位（`startLine`/`endLine`）不會隨文件編輯自動校正——在錯誤位置上方插入/刪除行之後，舊留言可能會對不準原本的段落
+  - 不支援編輯已送出的留言內容，只能刪除整個討論串重新留言
+  - 作者名稱固定取作業系統使用者名稱，沒有多人協作/身分切換的概念
 
 ## Phase 5 — EPUB 匯入／匯出（獨立模組）
 
