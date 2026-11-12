@@ -20,9 +20,9 @@ export class ChapterTreeItem extends vscode.TreeItem {
     this.contextValue = "novelTranslateChapter";
     this.iconPath = new vscode.ThemeIcon("note");
     this.command = {
-      command: "novelTranslate.openChapterTranslation",
-      title: "開啟譯文",
-      arguments: [chapter]
+      command: "novelTranslate.openCompareView",
+      title: "開啟原文／譯文比對",
+      arguments: [this]
     };
   }
 }

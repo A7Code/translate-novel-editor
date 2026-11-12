@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { ProjectStore } from "../services/projectStore";
+import { CompareScrollSync } from "../services/compareScrollSync";
 import { WorkTreeItem, WorkTreeProvider } from "../views/workTreeProvider";
-import { ChapterConfig } from "../types";
+import { openCompareView } from "./compareCommands";
 
 export async function createWork(store: ProjectStore | undefined, treeProvider: WorkTreeProvider): Promise<void> {
   if (!store) {
@@ -43,6 +44,7 @@ export async function createWork(store: ProjectStore | undefined, treeProvider: 
 export async function addChapter(
   store: ProjectStore | undefined,
   treeProvider: WorkTreeProvider,
+  scrollSync: CompareScrollSync,
   item?: WorkTreeItem
 ): Promise<void> {
   if (!store) {
@@ -66,12 +68,13 @@ export async function addChapter(
 
   const chapter = await store.addChapter(workId, title.trim());
   treeProvider.refresh();
-  await openTranslationDocument(store, chapter);
+  await openCompareView(store, scrollSync, chapter);
 }
 
 export async function importChapterFile(
   store: ProjectStore | undefined,
   treeProvider: WorkTreeProvider,
+  scrollSync: CompareScrollSync,
   item?: WorkTreeItem
 ): Promise<void> {
   if (!store) {
@@ -110,21 +113,10 @@ export async function importChapterFile(
   const chapter = await store.addChapter(workId, title.trim(), content);
   treeProvider.refresh();
   vscode.window.showInformationMessage(`已匯入章節「${chapter.title}」。`);
+  await openCompareView(store, scrollSync, chapter);
 }
 
-export async function openChapterTranslation(store: ProjectStore | undefined, chapter: ChapterConfig): Promise<void> {
-  if (!store) {
-    return;
-  }
-  await openTranslationDocument(store, chapter);
-}
-
-async function openTranslationDocument(store: ProjectStore, chapter: ChapterConfig): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(store.resolveUri(chapter.translationPath));
-  await vscode.window.showTextDocument(document, { preview: false });
-}
-
-async function resolveWorkId(store: ProjectStore, item: WorkTreeItem | undefined): Promise<string | undefined> {
+async function resolveWorkId(store: ProjectStore, item?: WorkTreeItem): Promise<string | undefined> {
   if (item) {
     return item.work.id;
   }

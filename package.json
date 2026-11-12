@@ -66,11 +66,6 @@
         "category": "小說翻譯"
       },
       {
-        "command": "novelTranslate.openChapterTranslation",
-        "title": "小說翻譯：開啟章節譯文",
-        "category": "小說翻譯"
-      },
-      {
         "command": "novelTranslate.openCompareView",
         "title": "小說翻譯：開啟原文／譯文比對",
         "category": "小說翻譯"
