@@ -56,11 +56,25 @@
   - 不支援編輯已送出的留言內容，只能刪除整個討論串重新留言
   - 作者名稱固定取作業系統使用者名稱，沒有多人協作/身分切換的概念
 
-## Phase 5 — EPUB 匯入／匯出（獨立模組）
+## Phase 5 — EPUB 匯入／匯出（獨立模組）（已完成）
 
-- 匯入：解壓 epub（zip）→ 依 OPF spine 讀取章節 XHTML → 用 HTML parser 抽出段落文字為 `originals/*.txt`，並保留每段對應的原始標籤結構映射檔
-- 匯出：讀取 `translations/*.txt` → 依映射檔把翻譯文字放回原 XHTML 結構的對應節點 → 重新封裝為 epub
-- 技術備註：EPUB 解析本身不難，難點在忠實還原排版格式（粗斜體、注腳、圖片、CSS、章節順序），因此刻意與核心純文字編輯流程解耦，風險隔離在此模組內
+- 新增執行期相依套件 `jszip`（zip 讀寫）與 `cheerio`（HTML/XML 剖析，皆為純 JS、無原生相依，esbuild 可直接打包進 `dist/extension.js`）
+- `src/services/epubService.ts`：核心剖析/重建邏輯，不依賴 `vscode` API，純函式方便獨立測試
+  - `parseEpub(bytes)`：解壓 zip → 讀 `META-INF/container.xml` 找出 OPF 路徑 → 剖析 OPF 的 `manifest`/`spine`（依 `spine` 順序、過濾出 HTML 類型的 manifest 項目）→ 每個章節 XHTML 用 `extractParagraphTexts` 抽出段落純文字；順便取出 `dc:title`/`dc:creator`/`dc:language` metadata 供建立作品時預填
+  - `extractParagraphTexts(html)`：用 `p, h1-h6, blockquote, li` 選取器依文件順序抓出有文字內容的節點，單一函式同時被「匯入時抽取」與「匯出時重新定位相同節點」共用，確保兩次跑出來的節點順序一致
+  - `applyTranslationToChapterHtml(html, translationText)`：把譯文純文字逐行塞回對應索引的段落節點（只替換文字內容，不重建行內標籤如粗斜體/連結/注腳——這塊排版還原刻意不做，見下方已知限制）；譯文行數不足的段落保留原文，可支援部分翻譯就先匯出
+  - `buildEpubZip(baseFiles, overrides)`：以原始 zip 的全部檔案為底，只替換 `overrides` 指定的章節 XHTML 路徑，其餘檔案（CSS／圖片／字型／NCX／OPF…）原樣保留；`mimetype` 強制排最前面且不壓縮，符合 EPUB OCF 規格
+  - 已用一組獨立的 smoke test（建構一個最小假 EPUB → 匯入 → 部分翻譯回填 → 重新打包 → 檢查各檔案）驗證過剖析/回填/重新打包的往返正確性
+- 資料模型：`WorkConfig.epubSource?: { packageDir, opfPath }` 記錄解壓後的 EPUB 內容存放位置（`.novel-translate/epub/<workId>/package/`，原樣保留**所有**原始檔案，不只章節 XHTML）；`ChapterConfig.epubContentPath?` 記錄該章節在 `packageDir` 底下對應哪個 XHTML 檔案。`ProjectStore` 新增 `setEpubSource`／`writeEpubPackageFiles`／`listEpubPackageFiles`（遞迴走訪 `packageDir`）
+- 指令「小說翻譯：匯入 EPUB」(`novelTranslate.importEpub`，作品總管 View 標題列)：挑選 `.epub` 檔 → 解析 → 依解析出的書名/作者/語言預填輸入框讓使用者確認/修改 → 建立新作品 → 每個 spine 章節建一個 `ChapterConfig`（原文內容＝段落文字逐行）→ 把整個 EPUB 內容樹寫進 `packageDir`
+- 指令「小說翻譯：匯出為 EPUB」(`novelTranslate.exportEpub`，只出現在有 `epubSource` 的作品項目右鍵選單；`WorkTreeItem.contextValue` 依是否有 `epubSource` 分成 `novelTranslateWork` / `novelTranslateWork-epub` 兩種，既有的新增章節／匯入文字檔選單改用 `viewItem =~ /^novelTranslateWork/` 正規表達式讓兩種作品都能用)：挑選輸出路徑 → 讀出 `packageDir` 全部檔案 → 對每個有 `epubContentPath` 的章節讀取其 `translations/*.txt` 並用 `applyTranslationToChapterHtml` 回填 → `buildEpubZip` 重新打包 → 寫出 `.epub`，並提供「在檔案總管中顯示」的捷徑
+- 已知限制：
+  - **不還原行內排版**：段落內的粗體/斜體/連結/注腳標記等行內標籤，匯入抽取成純文字時就已經遺失；匯出時用 `.text()` 整段覆寫，即使保留了該段落的結構（標籤本身還在），行內標籤的巢狀內容也會被整段文字取代——這是本 Phase 一開始就刻意接受的技術取捨（見 Phase 5 標題旁的設計理由），不是遺漏
+  - 段落抽取只認 `p / h1-h6 / blockquote / li`，`div`、表格（`table`/`td`）、圖說文字等不會被當成段落抽出，也不會被翻譯
+  - 匯出時用 cheerio 的 XML 模式序列化，非 ASCII 字元（含所有中文）會輸出成 `&#xXXXX;` 數字字元參照——這是合法的 XML，電子書閱讀器都能正確解析顯示，只是直接打開原始檔案看會看不到中文字，並讓檔案略為肥大
+  - 只支援常見的 EPUB2/EPUB3 結構（`container.xml` → 單一 OPF → `manifest`/`spine`）；特殊、不規範或有 DRM 保護的 EPUB 可能解析失敗
+  - 匯出只能針對「從 EPUB 匯入」的作品；純文字建立的作品沒有排版樣板可還原，不提供匯出成 EPUB 的功能
+  - 不支援把後續用「新增章節」手動加的額外章節一併排進匯出的 spine（這些章節沒有 `epubContentPath`，匯出時會被忽略）
 
 ## Phase 6 — 打包發佈
 

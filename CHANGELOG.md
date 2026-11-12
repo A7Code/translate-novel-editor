@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Phase 5：EPUB 匯入／匯出。新增「匯入 EPUB」建立新作品（自動依 spine 拆出章節、保留整個 EPUB 內容樹）；從 EPUB 匯入的作品可以「匯出為 EPUB」，把目前的譯文回填進原始排版後重新打包。新增執行期相依 `jszip`、`cheerio`。
 - Phase 4：翻譯筆記。用 VSCode 原生 Comments API 在原文／譯文檔案上留言討論串，資料持久化在 `.novel-translate/comments/<workId>/<chapterId>.json`；可切換「待確認／已解決」狀態、刪除整個討論串。
 - 新增：「詞彙表自動完成模式」設定 `novelTranslate.glossaryAutocomplete.enabled`（預設開啟），控制開啟比對畫面時是否自動套用詞彙表自動完成語言模式；側邊欄「設置」View 新增對應的核取方塊，可直接勾選/取消勾選。
 - 修正：上述核取方塊原本只影響「之後新開啟」的比對畫面，對目前已開啟的分頁沒有任何作用，看起來像設定沒生效。現在切換核取方塊會立即把所有已開啟、屬於某個章節的原文／譯文分頁同步套用或移除 `novel-translation` 語言模式；套件啟動時也會依目前設定值做一次校正。
