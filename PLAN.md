@@ -10,16 +10,18 @@
 - `novelTranslate.createWork`、`novelTranslate.openCompareView` 指令（目前為顯示「即將推出」訊息的 stub）
 - F5 偵錯啟動設定
 
-## Phase 1 — 作品管理
+## Phase 1 — 作品管理（已完成）
 
-- 設計 `.novel-translate/project.json` 專案設定格式：作品清單、章節清單、原文/譯文路徑對應、來源與目標語言
-- 作品／章節採成對純文字檔儲存：`originals/<work>/chXX.txt` 對 `translations/<work>/chXX.txt`
-- 「作品總管」TreeView 改為讀取實際專案資料，顯示作品 → 章節
-- 指令：新增作品、新增章節、匯入現有文字檔為章節
+- `.novel-translate/project.json` 專案設定格式：作品清單、每個作品的章節清單、原文/譯文路徑對應、來源與目標語言（`src/types.ts`、`src/services/projectStore.ts`）
+- 作品／章節採成對純文字檔儲存：`originals/<workId>/chXX.txt` 對 `translations/<workId>/chXX.txt`
+- 「作品總管」TreeView 改為讀取實際專案資料，顯示作品 → 章節（`src/views/workTreeProvider.ts`）
+- 指令：新增作品（`novelTranslate.createWork`）、新增章節（`novelTranslate.addChapter`）、匯入現有文字檔為章節（`novelTranslate.importChapterFile`）、開啟章節譯文（`novelTranslate.openChapterTranslation`）、重新整理作品清單（`novelTranslate.refreshWorks`）
+- 已知限制：僅支援單一工作區資料夾（取 `workspaceFolders[0]`）；尚未提供刪除/重新命名作品或章節的指令，留待後續視需要補上
 
 ## Phase 2 — 比對框（原文／譯文比對編輯）
 
-- 指令「開啟章節比對」：於編輯器群組左右開啟原文（唯讀）與譯文（可編輯）
+- `novelTranslate.openCompareView` 指令已接上章節選單（Phase 1），目前仍是顯示「即將推出」的 stub；這裡要補上真正邏輯
+- 於編輯器群組左右開啟原文（唯讀）與譯文（可編輯）
 - 套用 VSCode 內建「鎖定捲動」(Locked Scrolling) 功能做捲動同步
 - 若原文/譯文段落數不一致，於章節設定中記錄 paragraph mapping（預設 1:1）
 
