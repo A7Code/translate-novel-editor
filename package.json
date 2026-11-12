@@ -90,6 +90,11 @@
         "category": "小說翻譯"
       },
       {
+        "command": "novelTranslate.toggleCompareLayout",
+        "title": "小說翻譯：切換比對畫面版面（翻譯在左／原文在左）",
+        "category": "小說翻譯"
+      },
+      {
         "command": "novelTranslate.refreshGlossary",
         "title": "小說翻譯：重新整理詞彙表",
         "category": "小說翻譯",
@@ -249,6 +254,11 @@
           "type": "boolean",
           "default": true,
           "description": "開啟原文／譯文比對畫面時，是否自動套用詞彙表自動完成語言模式（關閉後維持一般自動完成）。"
+        },
+        "novelTranslate.compareView.translationOnLeft": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，翻譯稿是否顯示在左側（取消勾選則改為原文在左、翻譯在右）。"
         }
       }
     }

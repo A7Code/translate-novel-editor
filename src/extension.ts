@@ -5,7 +5,7 @@ import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareScrollSync } from "./services/compareScrollSync";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
-import { openCompareView, syncGlossaryAutocompleteLanguageMode } from "./commands/compareCommands";
+import { openCompareView, syncGlossaryAutocompleteLanguageMode, toggleCompareLayout } from "./commands/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
@@ -64,6 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => compareScrollSync.toggle()),
+
+    vscode.commands.registerCommand("novelTranslate.toggleCompareLayout", () => toggleCompareLayout()),
 
     vscode.commands.registerCommand("novelTranslate.refreshGlossary", () => glossaryTreeProvider.refresh()),
 
