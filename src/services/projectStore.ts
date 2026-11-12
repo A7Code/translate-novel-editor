@@ -133,6 +133,29 @@ export class ProjectStore {
     return undefined;
   }
 
+  async findWorkIdForDocumentUri(uri: vscode.Uri): Promise<string | undefined> {
+    const config = await this.load();
+    const target = uri.toString();
+    for (const work of config.works) {
+      const chapter = work.chapters.find(
+        (candidate) =>
+          this.resolveUri(candidate.originalPath).toString() === target ||
+          this.resolveUri(candidate.translationPath).toString() === target
+      );
+      if (chapter) {
+        return work.id;
+      }
+    }
+    return undefined;
+  }
+
+  async findGlossaryEntryByTerm(workId: string, term: string): Promise<GlossaryEntry | undefined> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const normalized = term.trim().toLowerCase();
+    return work.glossary.find((candidate) => candidate.term.trim().toLowerCase() === normalized);
+  }
+
   private findWork(config: ProjectConfig, workId: string): WorkConfig {
     const work = config.works.find((candidate) => candidate.id === workId);
     if (!work) {
