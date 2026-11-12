@@ -5,11 +5,11 @@ import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareScrollSync } from "./services/compareScrollSync";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
-import { openCompareView } from "./commands/compareCommands";
+import { openCompareView, syncGlossaryAutocompleteLanguageMode } from "./commands/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
-import { TRANSLATION_LANGUAGE_ID } from "./constants";
+import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -31,6 +31,12 @@ export function activate(context: vscode.ExtensionContext) {
     settingsTreeView.onDidChangeCheckboxState((event) => {
       for (const [item, state] of event.items) {
         settingsTreeProvider.handleCheckboxChange(item, state);
+      }
+    }),
+
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY)) {
+        void syncGlossaryAutocompleteLanguageMode(projectStore);
       }
     }),
 
@@ -76,6 +82,8 @@ export function activate(context: vscode.ExtensionContext) {
       new GlossaryCompletionProvider(projectStore)
     )
   );
+
+  void syncGlossaryAutocompleteLanguageMode(projectStore);
 }
 
 export function deactivate() {}

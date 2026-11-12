@@ -119,20 +119,6 @@ export class ProjectStore {
     await this.save(config);
   }
 
-  async findChapterByTranslationUri(
-    uri: vscode.Uri
-  ): Promise<{ workId: string; chapter: ChapterConfig } | undefined> {
-    const config = await this.load();
-    const target = uri.toString();
-    for (const work of config.works) {
-      const chapter = work.chapters.find((candidate) => this.resolveUri(candidate.translationPath).toString() === target);
-      if (chapter) {
-        return { workId: work.id, chapter };
-      }
-    }
-    return undefined;
-  }
-
   async findWorkIdForDocumentUri(uri: vscode.Uri): Promise<string | undefined> {
     const config = await this.load();
     const target = uri.toString();

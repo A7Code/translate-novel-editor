@@ -51,15 +51,15 @@ src/
     compareScrollSync.ts        # 比對框雙欄的捲動同步（依行號對齊，取代內建鎖定捲動）
   commands/
     workCommands.ts             # 建立作品、新增章節、匯入文字檔的指令邏輯
-    compareCommands.ts          # 開啟原文／譯文雙欄比對（唯讀＋行號同步捲動＋設定譯文語言模式）
+    compareCommands.ts          # 開啟原文／譯文雙欄比對（原文唯讀＋行號同步捲動＋兩側都設定為 novel-translation 語言模式）
     glossaryCommands.ts         # 新增/編輯/刪除詞條的指令邏輯
     languageModeCommands.ts     # 切換目前分頁語言模式（novel-translation ↔ plaintext）
   providers/
-    glossaryCompletionProvider.ts  # novel-translation 語言的 CompletionItemProvider，來源是作品詞彙表
+    glossaryCompletionProvider.ts  # novel-translation 語言的 CompletionItemProvider，依文件 URI 對應到任一作品章節（原文或譯文皆可），每個詞條同時給出原文／譯名兩個候選項
   views/
     workTreeProvider.ts         # 「作品總管」View：讀取 ProjectStore 顯示作品 → 章節
     glossaryTreeProvider.ts     # 「詞彙表」View：讀取 ProjectStore 顯示作品 → 詞條
-    settingsTreeProvider.ts     # 「設置」View：目前只有一個同步捲動開關的核取方塊項目
+    settingsTreeProvider.ts     # 「設置」View：同步捲動開關、詞彙表自動完成模式開關，兩個核取方塊項目
 resources/
   icon.svg                      # Activity Bar 圖示
 ```
@@ -72,9 +72,9 @@ resources/
 - `commands`：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`refreshWorks`、`openCompareView`、`toggleScrollSync`、`refreshGlossary`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry`、`toggleAutocompleteMode`
 - `menus`：作品項目的右鍵選單（新增章節／匯入文字檔）、章節項目的右鍵選單（開啟比對，與單擊章節項目相同效果）、詞彙表作品項目的右鍵選單（新增詞條）、詞條項目的右鍵選單（編輯／刪除）、兩個 View 標題列各自的重新整理按鈕
 - `languages` / `configurationDefaults`：自訂語言模式 `novel-translation`，並關閉其 `editor.wordBasedSuggestions`，讓詞彙表自動完成跟一般聯想雜訊分流
-- `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器
+- `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器；`novelTranslate.glossaryAutocomplete.enabled`（boolean，預設 `true`）——開啟比對畫面時是否自動把原文／譯文都設為 `novel-translation` 語言模式（詞彙表自動完成）
 
-作品管理（Phase 1）、比對框（Phase 2）、詞彙表管理與自動完成（Phase 3）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`——詞彙表就存在每個 `WorkConfig.glossary` 裡，沒有另開 `glossary.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView` 依賴內建指令 `workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀），並會把譯文檔案用 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式；捲動同步則是 `CompareScrollSync`（`src/services/compareScrollSync.ts`）自行監聽 `onDidChangeTextEditorVisibleRanges` 並用 `revealRange` 對齊行號，**不再使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。
+作品管理（Phase 1）、比對框（Phase 2）、詞彙表管理與自動完成（Phase 3）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`——詞彙表就存在每個 `WorkConfig.glossary` 裡，沒有另開 `glossary.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView` 依賴內建指令 `workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀），並在 `novelTranslate.glossaryAutocomplete.enabled` 設定開啟時，把原文與譯文檔案都用 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（該設定關閉時則維持文件原本的語言模式，不套用詞彙表自動完成）；捲動同步則是 `CompareScrollSync`（`src/services/compareScrollSync.ts`）自行監聽 `onDidChangeTextEditorVisibleRanges` 並用 `revealRange` 對齊行號，**不再使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。
 
 `CompareScrollSync` 內部用「每個 uri 同時最多一筆待回應的 `revealRange` 請求＋排隊＋落點偏差學習」來處理 `revealRange(AtTop)` 實際落點與要求行數不保證精確對齊、連續捲動時請求互相干擾的問題；是否啟用由設定 `novelTranslate.compareScrollSync.enabled` 控制，可透過 `novelTranslate.toggleScrollSync` 指令、比對視窗可見時顯示的狀態列項目、或 `SettingsTreeProvider`（`src/views/settingsTreeProvider.ts`，掛在「設置」View、用 `TreeItem.checkboxState` + `TreeView.onDidChangeCheckboxState` 實作核取方塊）三種 UI 入口切換，彼此透過 `onDidChangeConfiguration` 保持同步。
 

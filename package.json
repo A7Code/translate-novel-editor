@@ -180,6 +180,11 @@
           "type": "boolean",
           "default": true,
           "description": "開啟原文／譯文比對畫面時，是否同步捲動兩側編輯器。"
+        },
+        "novelTranslate.glossaryAutocomplete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，是否自動套用詞彙表自動完成語言模式（關閉後維持一般自動完成）。"
         }
       }
     }

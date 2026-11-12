@@ -9,24 +9,36 @@ export class GlossaryCompletionProvider implements vscode.CompletionItemProvider
       return [];
     }
 
-    const found = await this.store.findChapterByTranslationUri(document.uri);
-    if (!found) {
+    const workId = await this.store.findWorkIdForDocumentUri(document.uri);
+    if (!workId) {
       return [];
     }
 
     const config = await this.store.load();
-    const work = config.works.find((candidate) => candidate.id === found.workId);
+    const work = config.works.find((candidate) => candidate.id === workId);
     if (!work) {
       return [];
     }
 
-    return work.glossary.map((entry) => {
-      const item = new vscode.CompletionItem(entry.translation, vscode.CompletionItemKind.Text);
-      item.detail = entry.category ? `${entry.term}（${entry.category}）` : entry.term;
-      item.documentation = entry.note ? new vscode.MarkdownString(entry.note) : undefined;
-      item.filterText = `${entry.term} ${entry.translation}`;
-      item.sortText = entry.term;
-      return item;
-    });
+    const items: vscode.CompletionItem[] = [];
+    for (const entry of work.glossary) {
+      const categorySuffix = entry.category ? `（${entry.category}）` : "";
+      const documentation = entry.note ? new vscode.MarkdownString(entry.note) : undefined;
+
+      const termItem = new vscode.CompletionItem(entry.term, vscode.CompletionItemKind.Text);
+      termItem.detail = `原文 → ${entry.translation}${categorySuffix}`;
+      termItem.documentation = documentation;
+      termItem.filterText = `${entry.term} ${entry.translation}`;
+      termItem.sortText = entry.term;
+      items.push(termItem);
+
+      const translationItem = new vscode.CompletionItem(entry.translation, vscode.CompletionItemKind.Text);
+      translationItem.detail = `譯文 → ${entry.term}${categorySuffix}`;
+      translationItem.documentation = documentation;
+      translationItem.filterText = `${entry.term} ${entry.translation}`;
+      translationItem.sortText = entry.translation;
+      items.push(translationItem);
+    }
+    return items;
   }
 }
