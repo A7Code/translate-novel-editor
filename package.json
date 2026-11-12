@@ -38,13 +38,36 @@
     "viewsWelcome": [
       {
         "view": "novelTranslate.works",
-        "contents": "尚未建立任何作品。\n[建立新作品](command:novelTranslate.createWork)\n\n作品管理功能將於後續版本實作（Phase 1）。"
+        "contents": "尚未建立任何作品。\n[建立新作品](command:novelTranslate.createWork)"
       }
     ],
     "commands": [
       {
         "command": "novelTranslate.createWork",
         "title": "小說翻譯：建立新作品",
+        "category": "小說翻譯",
+        "icon": "$(add)"
+      },
+      {
+        "command": "novelTranslate.refreshWorks",
+        "title": "小說翻譯：重新整理作品清單",
+        "category": "小說翻譯",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "novelTranslate.addChapter",
+        "title": "小說翻譯：新增章節",
+        "category": "小說翻譯",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "novelTranslate.importChapterFile",
+        "title": "小說翻譯：匯入文字檔為章節",
+        "category": "小說翻譯"
+      },
+      {
+        "command": "novelTranslate.openChapterTranslation",
+        "title": "小說翻譯：開啟章節譯文",
         "category": "小說翻譯"
       },
       {
@@ -53,6 +76,35 @@
         "category": "小說翻譯"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "novelTranslate.createWork",
+          "when": "view == novelTranslate.works",
+          "group": "navigation"
+        },
+        {
+          "command": "novelTranslate.refreshWorks",
+          "when": "view == novelTranslate.works",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "novelTranslate.addChapter",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateWork",
+          "group": "inline"
+        },
+        {
+          "command": "novelTranslate.importChapterFile",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateWork"
+        },
+        {
+          "command": "novelTranslate.openCompareView",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateChapter"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "novel-translation",

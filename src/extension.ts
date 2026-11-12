@@ -1,19 +1,42 @@
 import * as vscode from "vscode";
-import { WorkTreeProvider } from "./views/workTreeProvider";
+import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./views/workTreeProvider";
 import { GlossaryTreeProvider } from "./views/glossaryTreeProvider";
+import { ProjectStore } from "./services/projectStore";
+import { addChapter, createWork, importChapterFile, openChapterTranslation } from "./commands/workCommands";
+import { ChapterConfig } from "./types";
 
 export function activate(context: vscode.ExtensionContext) {
-  const workTreeProvider = new WorkTreeProvider();
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const projectStore = workspaceFolder ? new ProjectStore(workspaceFolder) : undefined;
+
+  const workTreeProvider = new WorkTreeProvider(projectStore);
   const glossaryTreeProvider = new GlossaryTreeProvider();
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("novelTranslate.works", workTreeProvider),
     vscode.window.registerTreeDataProvider("novelTranslate.glossary", glossaryTreeProvider),
-    vscode.commands.registerCommand("novelTranslate.createWork", () => {
-      vscode.window.showInformationMessage("作品管理功能將於後續版本推出。");
-    }),
-    vscode.commands.registerCommand("novelTranslate.openCompareView", () => {
-      vscode.window.showInformationMessage("原文／譯文比對功能將於後續版本推出。");
+
+    vscode.commands.registerCommand("novelTranslate.createWork", () => createWork(projectStore, workTreeProvider)),
+
+    vscode.commands.registerCommand("novelTranslate.addChapter", (item?: WorkTreeItem) =>
+      addChapter(projectStore, workTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.importChapterFile", (item?: WorkTreeItem) =>
+      importChapterFile(projectStore, workTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.openChapterTranslation", (chapter: ChapterConfig) =>
+      openChapterTranslation(projectStore, chapter)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
+
+    vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) => {
+      const title = item?.chapter.title;
+      vscode.window.showInformationMessage(
+        title ? `「${title}」的原文／譯文比對功能將於後續版本推出。` : "原文／譯文比對功能將於後續版本推出。"
+      );
     })
   );
 }
