@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./views/workTreeProvider";
 import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./views/glossaryTreeProvider";
+import { GlossaryManagerPanel } from "./panels/glossaryManagerPanel";
 import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareScrollSync } from "./services/compareScrollSync";
@@ -82,6 +83,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.deleteGlossaryEntry", (item?: GlossaryEntryTreeItem) =>
       deleteGlossaryEntry(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.openGlossaryManager", (item?: GlossaryWorkTreeItem) =>
+      GlossaryManagerPanel.createOrShow(projectStore, glossaryTreeProvider, item?.work.id)
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleAutocompleteMode", () => toggleAutocompleteMode()),

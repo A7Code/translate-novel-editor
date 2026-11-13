@@ -117,6 +117,12 @@
         "category": "小說翻譯"
       },
       {
+        "command": "novelTranslate.openGlossaryManager",
+        "title": "小說翻譯：開啟詞彙管理",
+        "category": "小說翻譯",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "novelTranslate.toggleAutocompleteMode",
         "title": "小說翻譯：切換詞彙表自動完成模式",
         "category": "小說翻譯"
@@ -166,6 +172,11 @@
         },
         {
           "command": "novelTranslate.refreshGlossary",
+          "when": "view == novelTranslate.glossary",
+          "group": "navigation"
+        },
+        {
+          "command": "novelTranslate.openGlossaryManager",
           "when": "view == novelTranslate.glossary",
           "group": "navigation"
         },
