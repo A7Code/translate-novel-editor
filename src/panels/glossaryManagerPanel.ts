@@ -7,10 +7,12 @@ import {
   GlossaryWorkTreeItem
 } from "../views/glossaryTreeProvider";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "../commands/glossaryCommands";
+import { searchGlossary } from "../services/glossarySearch";
 
 type WebviewMessage =
   | { type: "ready" }
   | { type: "selectWork"; workId: string }
+  | { type: "search"; query: string }
   | { type: "add" }
   | { type: "edit"; entryId: string }
   | { type: "delete"; entryId: string };
@@ -53,6 +55,7 @@ export class GlossaryManagerPanel {
 
   private readonly disposables: vscode.Disposable[] = [];
   private selectedWorkId: string | undefined;
+  private searchQuery = "";
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -89,6 +92,10 @@ export class GlossaryManagerPanel {
         return;
       case "selectWork":
         await this.selectWork(message.workId);
+        return;
+      case "search":
+        this.searchQuery = message.query;
+        await this.postEntries();
         return;
       case "add": {
         const work = await this.requireSelectedWork();
@@ -128,9 +135,13 @@ export class GlossaryManagerPanel {
     }
   }
 
-  private async requireSelectedWork(): Promise<WorkConfig | undefined> {
+  private async getSelectedWork(): Promise<WorkConfig | undefined> {
     const config = await this.store.load();
-    const work = config.works.find((candidate) => candidate.id === this.selectedWorkId);
+    return config.works.find((candidate) => candidate.id === this.selectedWorkId);
+  }
+
+  private async requireSelectedWork(): Promise<WorkConfig | undefined> {
+    const work = await this.getSelectedWork();
     if (!work) {
       vscode.window.showErrorMessage("請先選擇作品。");
       return undefined;
@@ -139,7 +150,7 @@ export class GlossaryManagerPanel {
   }
 
   private async findEntry(entryId: string): Promise<GlossaryEntry | undefined> {
-    const work = await this.requireSelectedWork();
+    const work = await this.getSelectedWork();
     return work?.glossary.find((entry) => entry.id === entryId);
   }
 
@@ -157,10 +168,10 @@ export class GlossaryManagerPanel {
   }
 
   private async postEntries(): Promise<void> {
-    const work = await this.requireSelectedWork();
+    const work = await this.getSelectedWork();
     void this.panel.webview.postMessage({
       type: "entries",
-      entries: work?.glossary ?? []
+      results: searchGlossary(work?.glossary ?? [], this.searchQuery)
     });
   }
 
@@ -202,6 +213,23 @@ export class GlossaryManagerPanel {
     color: var(--vscode-dropdown-foreground);
     border: 1px solid var(--vscode-dropdown-border);
     padding: 4px 6px;
+  }
+  header input[type="text"] {
+    flex: 1 1 auto;
+    max-width: 320px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    padding: 4px 8px;
+  }
+  header input[type="text"]:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+  }
+  mark {
+    background-color: var(--vscode-editor-findMatchHighlightBackground, #ea5c0055);
+    color: inherit;
+    border-radius: 2px;
   }
   button {
     background-color: var(--vscode-button-background);
@@ -250,6 +278,7 @@ export class GlossaryManagerPanel {
 <body>
   <header>
     <select id="workSelect"></select>
+    <input id="searchInput" type="text" placeholder="搜尋原文／譯文..." />
     <span style="flex: 1 1 auto"></span>
     <button id="addButton">新增詞條</button>
   </header>
@@ -270,12 +299,22 @@ export class GlossaryManagerPanel {
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const workSelect = document.getElementById("workSelect");
+  const searchInput = document.getElementById("searchInput");
   const addButton = document.getElementById("addButton");
   const entryList = document.getElementById("entryList");
   const emptyState = document.getElementById("emptyState");
 
   workSelect.addEventListener("change", () => {
     vscode.postMessage({ type: "selectWork", workId: workSelect.value });
+  });
+
+  let searchDebounce;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchDebounce);
+    const query = searchInput.value;
+    searchDebounce = setTimeout(() => {
+      vscode.postMessage({ type: "search", query });
+    }, 120);
   });
 
   addButton.addEventListener("click", () => {
@@ -304,18 +343,39 @@ export class GlossaryManagerPanel {
     workSelect.hidden = works.length <= 1;
   }
 
-  function renderEntries(entries) {
+  function renderHighlighted(match) {
+    const fragment = document.createDocumentFragment();
+    const sorted = [...match.highlights].sort((a, b) => a[0] - b[0]);
+    let cursor = 0;
+    for (const [start, length] of sorted) {
+      if (start > cursor) {
+        fragment.appendChild(document.createTextNode(match.text.slice(cursor, start)));
+      }
+      const mark = document.createElement("mark");
+      mark.textContent = match.text.slice(start, start + length);
+      fragment.appendChild(mark);
+      cursor = start + length;
+    }
+    if (cursor < match.text.length) {
+      fragment.appendChild(document.createTextNode(match.text.slice(cursor)));
+    }
+    return fragment;
+  }
+
+  function renderEntries(results) {
     entryList.innerHTML = "";
-    emptyState.hidden = entries.length > 0;
-    for (const entry of entries) {
+    emptyState.hidden = results.length > 0;
+    emptyState.textContent = searchInput.value.trim() ? "沒有符合的詞條。" : "這個作品還沒有詞條。";
+    for (const result of results) {
+      const entry = result.entry;
       const row = document.createElement("tr");
 
       const termCell = document.createElement("td");
-      termCell.textContent = entry.term;
+      termCell.appendChild(renderHighlighted(result.term));
       row.appendChild(termCell);
 
       const translationCell = document.createElement("td");
-      translationCell.textContent = entry.translation;
+      translationCell.appendChild(renderHighlighted(result.translation));
       row.appendChild(translationCell);
 
       const categoryCell = document.createElement("td");
@@ -353,7 +413,7 @@ export class GlossaryManagerPanel {
     if (message.type === "init") {
       renderWorks(message.works, message.selectedWorkId);
     } else if (message.type === "entries") {
-      renderEntries(message.entries);
+      renderEntries(message.results);
     }
   });
 
