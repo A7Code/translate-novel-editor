@@ -12,7 +12,7 @@ import { searchGlossary } from "../services/glossarySearch";
 type WebviewMessage =
   | { type: "ready" }
   | { type: "selectWork"; workId: string }
-  | { type: "search"; query: string }
+  | { type: "search"; query: string; phonetic: boolean }
   | { type: "add" }
   | { type: "edit"; entryId: string }
   | { type: "delete"; entryId: string };
@@ -56,6 +56,7 @@ export class GlossaryManagerPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private selectedWorkId: string | undefined;
   private searchQuery = "";
+  private phoneticEnabled = false;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -95,6 +96,7 @@ export class GlossaryManagerPanel {
         return;
       case "search":
         this.searchQuery = message.query;
+        this.phoneticEnabled = message.phonetic;
         await this.postEntries();
         return;
       case "add": {
@@ -171,7 +173,7 @@ export class GlossaryManagerPanel {
     const work = await this.getSelectedWork();
     void this.panel.webview.postMessage({
       type: "entries",
-      results: searchGlossary(work?.glossary ?? [], this.searchQuery)
+      results: searchGlossary(work?.glossary ?? [], this.searchQuery, this.phoneticEnabled)
     });
   }
 
@@ -231,6 +233,27 @@ export class GlossaryManagerPanel {
     color: inherit;
     border-radius: 2px;
   }
+  mark.phonetic {
+    background-color: transparent;
+    outline: 1px dashed var(--vscode-descriptionForeground);
+    border-radius: 2px;
+  }
+  .phonetic-badge {
+    margin-left: 4px;
+    font-size: 0.85em;
+    color: var(--vscode-descriptionForeground);
+  }
+  #phoneticToggle {
+    background-color: transparent;
+    color: var(--vscode-foreground);
+    border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+    padding: 3px 8px;
+  }
+  #phoneticToggle.active {
+    background-color: var(--vscode-inputOption-activeBackground, var(--vscode-button-background));
+    color: var(--vscode-inputOption-activeForeground, var(--vscode-button-foreground));
+    border-color: var(--vscode-inputOption-activeBorder, transparent);
+  }
   button {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -279,6 +302,7 @@ export class GlossaryManagerPanel {
   <header>
     <select id="workSelect"></select>
     <input id="searchInput" type="text" placeholder="搜尋原文／譯文..." />
+    <button id="phoneticToggle" title="同音比對：找不到完全相符的文字時，改比對讀音（含聲調）是否相同">同音</button>
     <span style="flex: 1 1 auto"></span>
     <button id="addButton">新增詞條</button>
   </header>
@@ -300,6 +324,7 @@ export class GlossaryManagerPanel {
   const vscode = acquireVsCodeApi();
   const workSelect = document.getElementById("workSelect");
   const searchInput = document.getElementById("searchInput");
+  const phoneticToggle = document.getElementById("phoneticToggle");
   const addButton = document.getElementById("addButton");
   const entryList = document.getElementById("entryList");
   const emptyState = document.getElementById("emptyState");
@@ -308,13 +333,19 @@ export class GlossaryManagerPanel {
     vscode.postMessage({ type: "selectWork", workId: workSelect.value });
   });
 
+  function sendSearch() {
+    vscode.postMessage({ type: "search", query: searchInput.value, phonetic: phoneticToggle.classList.contains("active") });
+  }
+
   let searchDebounce;
   searchInput.addEventListener("input", () => {
     clearTimeout(searchDebounce);
-    const query = searchInput.value;
-    searchDebounce = setTimeout(() => {
-      vscode.postMessage({ type: "search", query });
-    }, 120);
+    searchDebounce = setTimeout(sendSearch, 120);
+  });
+
+  phoneticToggle.addEventListener("click", () => {
+    phoneticToggle.classList.toggle("active");
+    sendSearch();
   });
 
   addButton.addEventListener("click", () => {
@@ -353,11 +384,20 @@ export class GlossaryManagerPanel {
       }
       const mark = document.createElement("mark");
       mark.textContent = match.text.slice(start, start + length);
+      if (match.phonetic) {
+        mark.classList.add("phonetic");
+      }
       fragment.appendChild(mark);
       cursor = start + length;
     }
     if (cursor < match.text.length) {
       fragment.appendChild(document.createTextNode(match.text.slice(cursor)));
+    }
+    if (match.phonetic) {
+      const badge = document.createElement("span");
+      badge.className = "phonetic-badge";
+      badge.textContent = "（同音）";
+      fragment.appendChild(badge);
     }
     return fragment;
   }
