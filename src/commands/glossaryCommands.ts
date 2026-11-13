@@ -127,7 +127,11 @@ async function runAddFlow(
   workId: string,
   prefillTerm?: string
 ): Promise<void> {
-  const input = await promptGlossaryInput(prefillTerm ? { term: prefillTerm, translation: "" } : undefined);
+  const input = await promptGlossaryInput(
+    store,
+    workId,
+    prefillTerm ? { term: prefillTerm, translation: "" } : undefined
+  );
   if (!input) {
     return;
   }
@@ -142,7 +146,7 @@ async function runEditFlow(
   workId: string,
   entry: GlossaryEntry
 ): Promise<void> {
-  const input = await promptGlossaryInput(entry);
+  const input = await promptGlossaryInput(store, workId, entry);
   if (!input) {
     return;
   }
@@ -180,12 +184,16 @@ async function pickGlossaryEntry(store: ProjectStore, workId: string): Promise<G
   return picked?.entry;
 }
 
-async function promptGlossaryInput(existing?: {
-  term: string;
-  translation: string;
-  category?: string;
-  note?: string;
-}): Promise<{ term: string; translation: string; category?: string; note?: string } | undefined> {
+async function promptGlossaryInput(
+  store: ProjectStore,
+  workId: string,
+  existing?: {
+    term: string;
+    translation: string;
+    category?: string;
+    note?: string;
+  }
+): Promise<{ term: string; translation: string; category?: string; note?: string } | undefined> {
   const term = await vscode.window.showInputBox({
     prompt: "原文詞彙",
     value: existing?.term,
@@ -204,10 +212,7 @@ async function promptGlossaryInput(existing?: {
     return undefined;
   }
 
-  const category = await vscode.window.showInputBox({
-    prompt: "分類（可留空，例如：人名、地名、專有名詞）",
-    value: existing?.category
-  });
+  const category = await promptCategory(store, workId, existing?.category);
 
   const note = await vscode.window.showInputBox({
     prompt: "備註（可留空）",
@@ -220,6 +225,69 @@ async function promptGlossaryInput(existing?: {
     category: category?.trim() || undefined,
     note: note?.trim() || undefined
   };
+}
+
+async function promptCategory(
+  store: ProjectStore,
+  workId: string,
+  currentValue?: string
+): Promise<string | undefined> {
+  const config = await store.load();
+  const work = config.works.find((candidate) => candidate.id === workId);
+
+  const existingCategories = new Set<string>();
+  work?.glossary.forEach((entry) => {
+    const trimmed = entry.category?.trim();
+    if (trimmed) {
+      existingCategories.add(trimmed);
+    }
+  });
+
+  const sortedCategories = Array.from(existingCategories).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+  const CUSTOM_INPUT = Symbol("custom");
+  const CLEAR = Symbol("clear");
+
+  type CategoryQuickPickItem = vscode.QuickPickItem & { value?: string | typeof CUSTOM_INPUT | typeof CLEAR };
+
+  const items: CategoryQuickPickItem[] = [
+    { label: "$(edit) 輸入新分類...", value: CUSTOM_INPUT },
+    { label: "$(circle-slash) 不分類（留空）", value: CLEAR }
+  ];
+
+  if (sortedCategories.length > 0) {
+    items.push({ label: "", kind: vscode.QuickPickItemKind.Separator });
+    for (const category of sortedCategories) {
+      items.push({
+        label: category,
+        description: category === currentValue ? "目前使用中" : undefined,
+        value: category
+      });
+    }
+  }
+
+  const picked = await vscode.window.showQuickPick(items, {
+    title: "分類（例如：人名、地名、專有名詞）",
+    placeHolder: "選擇現有分類，或選擇「輸入新分類」自行輸入"
+  });
+
+  if (!picked) {
+    return currentValue;
+  }
+
+  if (picked.value === CLEAR) {
+    return undefined;
+  }
+
+  if (picked.value === CUSTOM_INPUT) {
+    const typed = await vscode.window.showInputBox({
+      prompt: "輸入新分類",
+      value: currentValue
+    });
+    return typed?.trim() || undefined;
+  }
+
+  return picked.value as string;
 }
 
 async function resolveWorkId(store: ProjectStore): Promise<string | undefined> {
