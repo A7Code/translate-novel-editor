@@ -20,6 +20,10 @@ export interface GlossaryEntry {
   translation: string;
   category?: string;
   note?: string;
+  /** term 第一個字的讀音（含聲調，例如 "lu4"；多音字會有多個）。新增/編輯詞條時寫入，供語音比對建議使用。 */
+  termInitialPinyin?: string[];
+  /** translation 第一個字的讀音（含聲調）。 */
+  translationInitialPinyin?: string[];
 }
 
 export interface WorkConfig {

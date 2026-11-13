@@ -264,6 +264,16 @@
           "type": "boolean",
           "default": true,
           "description": "開啟原文／譯文比對畫面時，翻譯稿是否顯示在左側（取消勾選則改為原文在左、翻譯在右）。"
+        },
+        "novelTranslate.glossaryAutocomplete.matchMode": {
+          "type": "string",
+          "enum": ["exact", "phonetic"],
+          "enumDescriptions": [
+            "只在輸入文字與詞條完全相同時才推薦補完。",
+            "除了完全相同之外，只要游標前一個字跟詞條首字同音（含聲調）也會推薦補完，方便修正注音輸入法選錯的同音錯字（例如打「路」也能推薦「露西亞」）。"
+          ],
+          "default": "exact",
+          "description": "詞彙表自動完成的比對模式。"
         }
       }
     }
@@ -293,6 +303,7 @@
   },
   "dependencies": {
     "cheerio": "^1.2.0",
-    "jszip": "^3.10.2"
+    "jszip": "^3.10.2",
+    "pinyin-pro": "^3.29.5"
   }
 }

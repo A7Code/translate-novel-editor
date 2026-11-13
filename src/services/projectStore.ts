@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { posix as posixPath } from "node:path";
 import { randomUUID } from "node:crypto";
 import { ChapterConfig, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "../types";
+import { getInitialPinyin } from "./pinyinUtil";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
 
@@ -90,7 +91,9 @@ export class ProjectStore {
       term: input.term,
       translation: input.translation,
       category: input.category,
-      note: input.note
+      note: input.note,
+      termInitialPinyin: getInitialPinyin(input.term),
+      translationInitialPinyin: getInitialPinyin(input.translation)
     };
     work.glossary.push(entry);
     await this.save(config);
@@ -113,6 +116,8 @@ export class ProjectStore {
     entry.translation = input.translation;
     entry.category = input.category;
     entry.note = input.note;
+    entry.termInitialPinyin = getInitialPinyin(input.term);
+    entry.translationInitialPinyin = getInitialPinyin(input.translation);
     await this.save(config);
     return entry;
   }
