@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { ProjectStore } from "../services/projectStore";
 import { CompareScrollSync } from "../services/compareScrollSync";
+import { CompareCursorSync } from "../services/compareCursorSync";
 import { WorkTreeItem, WorkTreeProvider } from "../views/workTreeProvider";
 import { openCompareView } from "./compareCommands";
 
@@ -45,6 +46,7 @@ export async function addChapter(
   store: ProjectStore | undefined,
   treeProvider: WorkTreeProvider,
   scrollSync: CompareScrollSync,
+  cursorSync: CompareCursorSync,
   item?: WorkTreeItem
 ): Promise<void> {
   if (!store) {
@@ -68,13 +70,14 @@ export async function addChapter(
 
   const chapter = await store.addChapter(workId, title.trim());
   treeProvider.refresh();
-  await openCompareView(store, scrollSync, chapter);
+  await openCompareView(store, scrollSync, cursorSync, chapter);
 }
 
 export async function importChapterFile(
   store: ProjectStore | undefined,
   treeProvider: WorkTreeProvider,
   scrollSync: CompareScrollSync,
+  cursorSync: CompareCursorSync,
   item?: WorkTreeItem
 ): Promise<void> {
   if (!store) {
@@ -113,7 +116,7 @@ export async function importChapterFile(
   const chapter = await store.addChapter(workId, title.trim(), content);
   treeProvider.refresh();
   vscode.window.showInformationMessage(`已匯入章節「${chapter.title}」。`);
-  await openCompareView(store, scrollSync, chapter);
+  await openCompareView(store, scrollSync, cursorSync, chapter);
 }
 
 async function resolveWorkId(store: ProjectStore, item?: WorkTreeItem): Promise<string | undefined> {

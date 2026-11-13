@@ -250,6 +250,11 @@
           "default": true,
           "description": "開啟原文／譯文比對畫面時，是否同步捲動兩側編輯器。"
         },
+        "novelTranslate.compareCursorSync.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，是否把焦點編輯器的游標行同步到另一側編輯器。"
+        },
         "novelTranslate.glossaryAutocomplete.enabled": {
           "type": "boolean",
           "default": true,

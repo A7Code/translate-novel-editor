@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../services/compareScrollSync";
+import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../services/compareCursorSync";
 import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY } from "../constants";
 
 const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
+const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
 const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 
@@ -11,6 +13,17 @@ class ScrollSyncSettingItem extends vscode.TreeItem {
     super("比對畫面同步捲動", vscode.TreeItemCollapsibleState.None);
     this.id = SCROLL_SYNC_ITEM_ID;
     this.tooltip = "開啟原文／譯文比對畫面時，是否同步捲動兩側編輯器。";
+    this.checkboxState = enabled
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+  }
+}
+
+class CursorSyncSettingItem extends vscode.TreeItem {
+  constructor(enabled: boolean) {
+    super("比對畫面同步游標行", vscode.TreeItemCollapsibleState.None);
+    this.id = CURSOR_SYNC_ITEM_ID;
+    this.tooltip = "開啟原文／譯文比對畫面時，是否把焦點編輯器的游標行同步到另一側編輯器（借用其原生的目前行樣式呈現對應位置）。";
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -48,6 +61,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
     this.configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY) ||
+        event.affectsConfiguration(CURSOR_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY)
       ) {
@@ -67,10 +81,12 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
   getChildren(): vscode.TreeItem[] {
     const config = vscode.workspace.getConfiguration();
     const scrollSyncEnabled = config.get<boolean>(SCROLL_SYNC_ENABLED_SETTING_KEY, true);
+    const cursorSyncEnabled = config.get<boolean>(CURSOR_SYNC_ENABLED_SETTING_KEY, true);
     const glossaryAutocompleteEnabled = config.get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true);
     const translationOnLeft = config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true);
     return [
       new ScrollSyncSettingItem(scrollSyncEnabled),
+      new CursorSyncSettingItem(cursorSyncEnabled),
       new GlossaryAutocompleteSettingItem(glossaryAutocompleteEnabled),
       new TranslationOnLeftSettingItem(translationOnLeft)
     ];
@@ -81,11 +97,13 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
     const settingKey =
       item.id === SCROLL_SYNC_ITEM_ID
         ? SCROLL_SYNC_ENABLED_SETTING_KEY
-        : item.id === GLOSSARY_AUTOCOMPLETE_ITEM_ID
-          ? GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY
-          : item.id === TRANSLATION_ON_LEFT_ITEM_ID
-            ? COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY
-            : undefined;
+        : item.id === CURSOR_SYNC_ITEM_ID
+          ? CURSOR_SYNC_ENABLED_SETTING_KEY
+          : item.id === GLOSSARY_AUTOCOMPLETE_ITEM_ID
+            ? GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY
+            : item.id === TRANSLATION_ON_LEFT_ITEM_ID
+              ? COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY
+              : undefined;
     if (!settingKey) {
       return;
     }

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
 import { CompareScrollSync } from "../services/compareScrollSync";
+import { CompareCursorSync } from "../services/compareCursorSync";
 import { ChapterConfig } from "../types";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
@@ -11,6 +12,7 @@ import {
 export async function openCompareView(
   store: ProjectStore | undefined,
   scrollSync: CompareScrollSync,
+  cursorSync: CompareCursorSync,
   chapter?: ChapterConfig
 ): Promise<void> {
   if (!store) {
@@ -51,6 +53,7 @@ export async function openCompareView(
   });
 
   scrollSync.setPair(originalUri, translationUri);
+  cursorSync.setPair(originalUri, translationUri);
 }
 
 // 讓使用者透過命令面板（Ctrl+Shift+P）或設置面板的核取方塊切換比對畫面的左右配置，

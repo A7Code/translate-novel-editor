@@ -4,6 +4,7 @@ import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } fro
 import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareScrollSync } from "./services/compareScrollSync";
+import { CompareCursorSync } from "./services/compareCursorSync";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
 import { openCompareView, syncGlossaryAutocompleteLanguageMode, toggleCompareLayout } from "./commands/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
@@ -21,6 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
   const settingsTreeProvider = new SettingsTreeProvider();
   const compareScrollSync = new CompareScrollSync();
+  const compareCursorSync = new CompareCursorSync();
   const commentController = new NovelCommentController(projectStore);
 
   const settingsTreeView = vscode.window.createTreeView("novelTranslate.settings", {
@@ -29,6 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     compareScrollSync,
+    compareCursorSync,
     commentController,
     settingsTreeProvider,
     settingsTreeView,
@@ -50,17 +53,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("novelTranslate.createWork", () => createWork(projectStore, workTreeProvider)),
 
     vscode.commands.registerCommand("novelTranslate.addChapter", (item?: WorkTreeItem) =>
-      addChapter(projectStore, workTreeProvider, compareScrollSync, item)
+      addChapter(projectStore, workTreeProvider, compareScrollSync, compareCursorSync, item)
     ),
 
     vscode.commands.registerCommand("novelTranslate.importChapterFile", (item?: WorkTreeItem) =>
-      importChapterFile(projectStore, workTreeProvider, compareScrollSync, item)
+      importChapterFile(projectStore, workTreeProvider, compareScrollSync, compareCursorSync, item)
     ),
 
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
 
     vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
-      openCompareView(projectStore, compareScrollSync, item?.chapter)
+      openCompareView(projectStore, compareScrollSync, compareCursorSync, item?.chapter)
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => compareScrollSync.toggle()),
