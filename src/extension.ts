@@ -19,7 +19,7 @@ import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./comm
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
 import { NovelCommentController } from "./services/novelCommentController";
-import { exportEpub, importEpub } from "./commands/epubCommands";
+import { exportEpub, importEpub } from "./epub/epubCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
 import { safeRun } from "./services/safeRun";
 
