@@ -18,20 +18,38 @@ import { deleteCommentThread, submitComment, toggleCommentResolved } from "./com
 import { exportEpub, importEpub } from "./epub/epubCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./core/constants";
 import { safeRun } from "./core/safeRun";
+import { SidebarSectionStateStore } from "./core/sidebarStateStore";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const projectStore = workspaceFolder ? new ProjectStore(workspaceFolder) : undefined;
 
-  const workTreeProvider = new WorkTreeProvider(projectStore);
-  const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
-  const settingsTreeProvider = new SettingsTreeProvider(context.globalState);
+  // 側邊欄三個 View（作品總管／詞彙表／設置）各自記住自己的展開／選取狀態，互不干擾。
+  const workSidebarState = new SidebarSectionStateStore(context.globalState, "novelTranslate.sidebarState.works");
+  const glossarySidebarState = new SidebarSectionStateStore(
+    context.globalState,
+    "novelTranslate.sidebarState.glossary"
+  );
+  const settingsSidebarState = new SidebarSectionStateStore(
+    context.globalState,
+    "novelTranslate.sidebarState.settings"
+  );
+
+  const workTreeProvider = new WorkTreeProvider(projectStore, workSidebarState);
+  const glossaryTreeProvider = new GlossaryTreeProvider(projectStore, glossarySidebarState);
+  const settingsTreeProvider = new SettingsTreeProvider(settingsSidebarState);
   const compareView = new CompareView();
   const cursorSyncExtension = new CursorSyncExtension(compareView);
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
   const glossaryLanguageModeExtension = new GlossaryLanguageModeExtension(compareView);
   const commentController = new NovelCommentController(projectStore);
 
+  const workTreeView = vscode.window.createTreeView("novelTranslate.works", {
+    treeDataProvider: workTreeProvider
+  });
+  const glossaryTreeView = vscode.window.createTreeView("novelTranslate.glossary", {
+    treeDataProvider: glossaryTreeProvider
+  });
   const settingsTreeView = vscode.window.createTreeView("novelTranslate.settings", {
     treeDataProvider: settingsTreeProvider
   });
@@ -43,6 +61,8 @@ export function activate(context: vscode.ExtensionContext) {
     glossaryLanguageModeExtension,
     commentController,
     settingsTreeProvider,
+    workTreeView,
+    glossaryTreeView,
     settingsTreeView,
     settingsTreeView.onDidChangeCheckboxState((event) => {
       for (const [item, state] of event.items) {
@@ -53,7 +73,35 @@ export function activate(context: vscode.ExtensionContext) {
       settingsTreeProvider.toggleCheckbox(item)
     ),
 
-    // 記住使用者展開／收合了哪些設定群組，下次開啟畫面時套用同樣的狀態。
+    // 記住使用者展開／收合了哪些節點、最後選了哪個項目，下次開啟畫面時套用同樣的狀態。
+    workTreeView.onDidExpandElement((event) => {
+      if (event.element.id) {
+        workTreeProvider.setExpanded(event.element.id, true);
+      }
+    }),
+    workTreeView.onDidCollapseElement((event) => {
+      if (event.element.id) {
+        workTreeProvider.setExpanded(event.element.id, false);
+      }
+    }),
+    workTreeView.onDidChangeSelection((event) => {
+      workTreeProvider.setSelected(event.selection[0]?.id);
+    }),
+
+    glossaryTreeView.onDidExpandElement((event) => {
+      if (event.element.id) {
+        glossaryTreeProvider.setExpanded(event.element.id, true);
+      }
+    }),
+    glossaryTreeView.onDidCollapseElement((event) => {
+      if (event.element.id) {
+        glossaryTreeProvider.setExpanded(event.element.id, false);
+      }
+    }),
+    glossaryTreeView.onDidChangeSelection((event) => {
+      glossaryTreeProvider.setSelected(event.selection[0]?.id);
+    }),
+
     settingsTreeView.onDidExpandElement((event) => {
       if (event.element.id) {
         settingsTreeProvider.setGroupExpanded(event.element.id, true);
@@ -64,15 +112,15 @@ export function activate(context: vscode.ExtensionContext) {
         settingsTreeProvider.setGroupExpanded(event.element.id, false);
       }
     }),
+    settingsTreeView.onDidChangeSelection((event) => {
+      settingsTreeProvider.setSelected(event.selection[0]?.id);
+    }),
 
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY)) {
         safeRun(syncGlossaryAutocompleteLanguageMode(projectStore), "同步詞彙表自動完成語言模式");
       }
     }),
-
-    vscode.window.registerTreeDataProvider("novelTranslate.works", workTreeProvider),
-    vscode.window.registerTreeDataProvider("novelTranslate.glossary", glossaryTreeProvider),
 
     vscode.commands.registerCommand("novelTranslate.createWork", () => createWork(projectStore, workTreeProvider)),
 
@@ -139,6 +187,43 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   safeRun(syncGlossaryAutocompleteLanguageMode(projectStore), "同步詞彙表自動完成語言模式");
+
+  // 側邊欄三個 View 展開哪些節點已經在 getChildren() 裡依紀錄套用了，這裡只需要額外
+  // 把「最後選取的節點」reveal 回來。畫面可能還沒就緒（例如側邊欄一開始沒被打開），
+  // 所以每個區塊都要接住例外，不能讓它擋住其他初始化。
+  const restoreTreeSelection = async (): Promise<void> => {
+    try {
+      const workId = workTreeProvider.getLastSelectedId();
+      const item = workId ? await workTreeProvider.findItemById(workId) : undefined;
+      if (item) {
+        await workTreeView.reveal(item, { select: true, focus: false });
+      }
+    } catch (error) {
+      console.error("[novelTranslate] 還原「作品總管」選取狀態時發生錯誤：", error);
+    }
+
+    try {
+      const glossaryId = glossaryTreeProvider.getLastSelectedId();
+      const item = glossaryId ? await glossaryTreeProvider.findItemById(glossaryId) : undefined;
+      if (item) {
+        await glossaryTreeView.reveal(item, { select: true, focus: false });
+      }
+    } catch (error) {
+      console.error("[novelTranslate] 還原「詞彙表」選取狀態時發生錯誤：", error);
+    }
+
+    try {
+      const settingsId = settingsTreeProvider.getLastSelectedId();
+      const item = settingsId ? settingsTreeProvider.findItemById(settingsId) : undefined;
+      if (item) {
+        await settingsTreeView.reveal(item, { select: true, focus: false });
+      }
+    } catch (error) {
+      console.error("[novelTranslate] 還原「設置」選取狀態時發生錯誤：", error);
+    }
+  };
+
+  void restoreTreeSelection();
 
   // 啟動當下 VS Code 可能還沒還原完上次開啟的分頁，所以先嘗試一次，沒找到配對的話
   // 就繼續監聽可見分頁變化，直到找到為止（找到後立即停止監聽，避免之後重複掃描）。

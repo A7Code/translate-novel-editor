@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/scrollSyncExtension";
 import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/cursorSyncExtension";
+import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
@@ -19,12 +20,16 @@ export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleChe
 // 群組節點的 id，同時也是記住展開狀態用的 key。
 const COMPARE_VIEW_GROUP_ID = "group.compareView";
 const GLOSSARY_GROUP_ID = "group.glossary";
-const GROUP_IDS = new Set([COMPARE_VIEW_GROUP_ID, GLOSSARY_GROUP_ID]);
 
-// 記住使用者展開／收合群組狀態用的 globalState key（跨視窗、重啟後仍保留）。
-const GROUP_EXPANDED_STATE_MEMENTO_KEY = "novelTranslate.settingsGroupExpandedState";
-
-type GroupExpandedState = Record<string, boolean>;
+// 各群組底下有哪些設定項目 id，用於 getParent() 往上找父節點。
+const GROUP_ITEM_IDS: Record<string, string[]> = {
+  [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
+  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID]
+};
+const GROUP_LABELS: Record<string, string> = {
+  [COMPARE_VIEW_GROUP_ID]: "比對畫面設定",
+  [GLOSSARY_GROUP_ID]: "詞彙表設定"
+};
 
 class SettingsGroupItem extends vscode.TreeItem {
   constructor(label: string, groupId: string, collapsibleState: vscode.TreeItemCollapsibleState) {
@@ -100,8 +105,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
   readonly onDidChangeTreeData = this.emitter.event;
   private readonly configSubscription: vscode.Disposable;
 
-  // globalState 是 VS Code 擴充功能用來跨視窗、重啟後仍保留少量狀態的機制（概念上等同網頁的 localStorage）。
-  constructor(private readonly globalState: vscode.Memento) {
+  constructor(private readonly stateStore: SidebarSectionStateStore) {
     this.configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (
         event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY) ||
@@ -119,59 +123,90 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
     this.configSubscription.dispose();
   }
 
+  // 使用者在樹狀視圖中變更選取時呼叫，記住最後選了哪個節點。
+  setSelected(id: string | undefined): void {
+    this.stateStore.setSelectedId(id);
+  }
+
+  getLastSelectedId(): string | undefined {
+    return this.stateStore.getSelectedId();
+  }
+
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     if (!element) {
-      return [
-        new SettingsGroupItem("比對畫面設定", COMPARE_VIEW_GROUP_ID, this.getGroupCollapsibleState(COMPARE_VIEW_GROUP_ID)),
-        new SettingsGroupItem("詞彙表設定", GLOSSARY_GROUP_ID, this.getGroupCollapsibleState(GLOSSARY_GROUP_ID))
-      ];
+      return [this.createGroupItem(COMPARE_VIEW_GROUP_ID), this.createGroupItem(GLOSSARY_GROUP_ID)];
     }
-
-    const config = vscode.workspace.getConfiguration();
-
-    if (element.id === COMPARE_VIEW_GROUP_ID) {
-      const translationOnLeft = config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true);
-      const scrollSyncEnabled = config.get<boolean>(SCROLL_SYNC_ENABLED_SETTING_KEY, true);
-      const cursorSyncEnabled = config.get<boolean>(CURSOR_SYNC_ENABLED_SETTING_KEY, true);
-      return [
-        new TranslationOnLeftSettingItem(translationOnLeft),
-        new ScrollSyncSettingItem(scrollSyncEnabled),
-        new CursorSyncSettingItem(cursorSyncEnabled)
-      ];
+    if (element.id && element.id in GROUP_ITEM_IDS) {
+      return GROUP_ITEM_IDS[element.id]
+        .map((itemId) => this.createSettingItem(itemId))
+        .filter((item): item is vscode.TreeItem => item !== undefined);
     }
-
-    if (element.id === GLOSSARY_GROUP_ID) {
-      const glossaryAutocompleteEnabled = config.get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true);
-      const glossaryPhoneticMatchEnabled =
-        config.get<string>(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY, "exact") === "phonetic";
-      return [
-        new GlossaryAutocompleteSettingItem(glossaryAutocompleteEnabled),
-        new GlossaryPhoneticMatchSettingItem(glossaryPhoneticMatchEnabled)
-      ];
-    }
-
     return [];
+  }
+
+  // reveal() 還原選取狀態時，VS Code 會用這個方法往上找出完整的父節點鏈。
+  getParent(element: vscode.TreeItem): vscode.TreeItem | undefined {
+    if (!element.id) {
+      return undefined;
+    }
+    for (const groupId of Object.keys(GROUP_ITEM_IDS)) {
+      if (GROUP_ITEM_IDS[groupId].includes(element.id)) {
+        return this.createGroupItem(groupId);
+      }
+    }
+    return undefined;
+  }
+
+  // 依照初始化時還原選取用的 id，找回對應的節點實例（可能是群組或設定項目）。
+  findItemById(id: string): vscode.TreeItem | undefined {
+    if (id in GROUP_ITEM_IDS) {
+      return this.createGroupItem(id);
+    }
+    return this.createSettingItem(id);
   }
 
   // 依照使用者上次留下的展開／收合紀錄決定群組初始狀態，預設為全展開。
   private getGroupCollapsibleState(groupId: string): vscode.TreeItemCollapsibleState {
-    const expandedState = this.globalState.get<GroupExpandedState>(GROUP_EXPANDED_STATE_MEMENTO_KEY, {});
-    const expanded = expandedState[groupId] ?? true;
+    const expanded = this.stateStore.isExpanded(groupId);
     return expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
   }
 
   // 使用者展開或收合群組時呼叫，把狀態寫回 globalState，下次開啟畫面時套用。
   setGroupExpanded(groupId: string, expanded: boolean): void {
-    if (!GROUP_IDS.has(groupId)) {
+    if (!(groupId in GROUP_ITEM_IDS)) {
       return;
     }
-    const expandedState = this.globalState.get<GroupExpandedState>(GROUP_EXPANDED_STATE_MEMENTO_KEY, {});
-    expandedState[groupId] = expanded;
-    void this.globalState.update(GROUP_EXPANDED_STATE_MEMENTO_KEY, expandedState);
+    this.stateStore.setExpanded(groupId, expanded);
+  }
+
+  private createGroupItem(groupId: string): SettingsGroupItem {
+    return new SettingsGroupItem(GROUP_LABELS[groupId], groupId, this.getGroupCollapsibleState(groupId));
+  }
+
+  private createSettingItem(itemId: string): vscode.TreeItem | undefined {
+    const config = vscode.workspace.getConfiguration();
+    switch (itemId) {
+      case TRANSLATION_ON_LEFT_ITEM_ID:
+        return new TranslationOnLeftSettingItem(config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true));
+      case SCROLL_SYNC_ITEM_ID:
+        return new ScrollSyncSettingItem(config.get<boolean>(SCROLL_SYNC_ENABLED_SETTING_KEY, true));
+      case CURSOR_SYNC_ITEM_ID:
+        return new CursorSyncSettingItem(config.get<boolean>(CURSOR_SYNC_ENABLED_SETTING_KEY, true));
+      case GLOSSARY_AUTOCOMPLETE_ITEM_ID:
+        return new GlossaryAutocompleteSettingItem(
+          config.get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true)
+        );
+      case GLOSSARY_PHONETIC_MATCH_ITEM_ID:
+        return new GlossaryPhoneticMatchSettingItem(
+          config.get<string>(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY, "exact") === "phonetic"
+        );
+      default:
+        return undefined;
+    }
   }
 
   // 使用者點擊樹狀視圖裡的核取方塊時觸發，依勾選狀態直接寫回設定值。

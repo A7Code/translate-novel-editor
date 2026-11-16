@@ -107,7 +107,7 @@ export class GlossaryManagerPanel {
         if (!work) {
           return;
         }
-        await addGlossaryEntry(this.store, this.treeProvider, new GlossaryWorkTreeItem(work));
+        await addGlossaryEntry(this.store, this.treeProvider, new GlossaryWorkTreeItem(work, false));
         await this.postEntries();
         return;
       }
