@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { CompareView } from "../compareView";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../../../constants";
+import { safeRun } from "../../safeRun";
 
 // 開啟比對畫面時，是否自動把原文／譯文兩側的分頁切換為詞彙表自動完成語言模式。
 // 只有在設定開啟時才向 CompareView 註冊監聽；設定關閉就取消訂閱。
@@ -38,8 +39,8 @@ export class GlossaryLanguageModeExtension implements vscode.Disposable {
       return;
     }
     this.registration = this.compareView.onDidSetPair((pair) => {
-      void this.applyLanguageMode(pair.originalUri);
-      void this.applyLanguageMode(pair.translationUri);
+      safeRun(this.applyLanguageMode(pair.originalUri), "切換原文分頁語言模式");
+      safeRun(this.applyLanguageMode(pair.translationUri), "切換譯文分頁語言模式");
     });
   }
 

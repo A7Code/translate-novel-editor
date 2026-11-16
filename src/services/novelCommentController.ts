@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { ProjectStore } from "./projectStore";
 import { CommentStore } from "./commentStore";
 import { CommentThreadData } from "../types";
+import { safeRun } from "./safeRun";
 
 const CONTROLLER_ID = "novelTranslate.notes";
 const CONTROLLER_LABEL = "小說翻譯筆記";
@@ -45,12 +46,14 @@ export class NovelCommentController implements vscode.Disposable {
 
     this.subscriptions.push(
       this.controller,
-      vscode.workspace.onDidOpenTextDocument((document) => void this.materialize(document)),
+      vscode.workspace.onDidOpenTextDocument((document) =>
+        safeRun(this.materialize(document), "載入分頁註解")
+      ),
       vscode.workspace.onDidCloseTextDocument((document) => this.dematerialize(document))
     );
 
     for (const document of vscode.workspace.textDocuments) {
-      void this.materialize(document);
+      safeRun(this.materialize(document), "載入分頁註解");
     }
   }
 

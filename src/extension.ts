@@ -21,6 +21,7 @@ import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvid
 import { NovelCommentController } from "./services/novelCommentController";
 import { exportEpub, importEpub } from "./commands/epubCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
+import { safeRun } from "./services/safeRun";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -55,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY)) {
-        void syncGlossaryAutocompleteLanguageMode(projectStore);
+        safeRun(syncGlossaryAutocompleteLanguageMode(projectStore), "同步詞彙表自動完成語言模式");
       }
     }),
 
@@ -126,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 
-  void syncGlossaryAutocompleteLanguageMode(projectStore);
+  safeRun(syncGlossaryAutocompleteLanguageMode(projectStore), "同步詞彙表自動完成語言模式");
 
   // 啟動當下 VS Code 可能還沒還原完上次開啟的分頁，所以先嘗試一次，沒找到配對的話
   // 就繼續監聽可見分頁變化，直到找到為止（找到後立即停止監聽，避免之後重複掃描）。

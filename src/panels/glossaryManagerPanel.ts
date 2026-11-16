@@ -8,6 +8,7 @@ import {
 } from "../views/glossaryTreeProvider";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "../commands/glossaryCommands";
 import { searchGlossary } from "../services/glossarySearch";
+import { safeRun } from "../services/safeRun";
 
 type WebviewMessage =
   | { type: "ready" }
@@ -65,13 +66,15 @@ export class GlossaryManagerPanel {
     initialWorkId?: string
   ) {
     this.selectedWorkId = initialWorkId;
-    this.panel.webview.html = this.renderHtml();
+    // 先把訊息監聽、dispose 處理掛好，才讓 webview 內容開始載入並執行它自己的初始化腳本，
+    // 避免 webview 送出的第一個 "ready" 訊息在監聽還沒註冊好時就被送出。
     this.panel.webview.onDidReceiveMessage(
-      (message: WebviewMessage) => void this.handleMessage(message),
+      (message: WebviewMessage) => safeRun(this.handleMessage(message), "處理詞彙管理面板訊息"),
       undefined,
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.panel.webview.html = this.renderHtml();
   }
 
   private dispose(): void {
