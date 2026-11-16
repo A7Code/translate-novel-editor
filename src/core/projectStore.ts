@@ -58,6 +58,20 @@ export class ProjectStore {
     return work;
   }
 
+  async updateWork(
+    workId: string,
+    input: { title: string; author?: string; sourceLanguage?: string; targetLanguage?: string }
+  ): Promise<WorkConfig> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    work.title = input.title;
+    work.author = input.author;
+    work.sourceLanguage = input.sourceLanguage;
+    work.targetLanguage = input.targetLanguage;
+    await this.save(config);
+    return work;
+  }
+
   async addChapter(
     workId: string,
     title: string,

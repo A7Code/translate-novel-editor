@@ -63,6 +63,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "novelTranslate.editWork",
+        "title": "小說翻譯：編輯作品",
+        "category": "小說翻譯",
+        "icon": "$(edit)"
+      },
+      {
         "command": "novelTranslate.refreshWorks",
         "title": "小說翻譯：重新整理作品清單",
         "category": "小說翻譯",
@@ -183,6 +189,11 @@
           "group": "navigation"
         },
         {
+          "command": "novelTranslate.createWork",
+          "when": "view == novelTranslate.glossary",
+          "group": "navigation"
+        },
+        {
           "command": "novelTranslate.refreshGlossary",
           "when": "view == novelTranslate.glossary",
           "group": "navigation"
@@ -225,6 +236,11 @@
           "command": "novelTranslate.addGlossaryCategory",
           "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryWork",
           "group": "inline@2"
+        },
+        {
+          "command": "novelTranslate.editWork",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryWork",
+          "group": "inline@3"
         },
         {
           "command": "novelTranslate.addGlossaryEntryToCategory",

@@ -1,14 +1,22 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { ProjectStore } from "../core/projectStore";
+import { WorkConfig } from "../core/types";
 import { CompareView } from "../compareView/compareView";
 import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
+import { GlossaryTreeProvider } from "../glossary/glossaryTreeProvider";
 import { openCompareView } from "../compareView/compareCommands";
 
-export async function createWork(store: ProjectStore | undefined, treeProvider: WorkTreeProvider): Promise<void> {
+// glossaryTreeProvider 是選擇性的：作品清單同時影響「作品總管」跟「詞彙表」兩個側邊欄，
+// 兩邊都需要在作品新增／編輯後重新整理；從只關心作品總管的呼叫端（例如命令面板）則可以省略。
+export async function createWork(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  glossaryTreeProvider?: GlossaryTreeProvider
+): Promise<WorkConfig | undefined> {
   if (!store) {
     vscode.window.showErrorMessage("請先開啟一個工作區資料夾，才能建立作品。");
-    return;
+    return undefined;
   }
 
   const title = await vscode.window.showInputBox({
@@ -17,7 +25,7 @@ export async function createWork(store: ProjectStore | undefined, treeProvider: 
     validateInput: (value) => (value.trim() ? undefined : "請輸入作品名稱")
   });
   if (!title) {
-    return;
+    return undefined;
   }
 
   const author = await vscode.window.showInputBox({ prompt: "作者（可留空）" });
@@ -38,7 +46,62 @@ export async function createWork(store: ProjectStore | undefined, treeProvider: 
   });
 
   treeProvider.refresh();
+  glossaryTreeProvider?.refresh();
   vscode.window.showInformationMessage(`已建立作品「${work.title}」。`);
+  return work;
+}
+
+export async function editWork(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  glossaryTreeProvider: GlossaryTreeProvider,
+  workId?: string
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const resolvedWorkId = workId ?? (await resolveWorkId(store));
+  if (!resolvedWorkId) {
+    return;
+  }
+
+  const config = await store.load();
+  const work = config.works.find((candidate) => candidate.id === resolvedWorkId);
+  if (!work) {
+    return;
+  }
+
+  const title = await vscode.window.showInputBox({
+    prompt: "作品名稱",
+    value: work.title,
+    validateInput: (value) => (value.trim() ? undefined : "請輸入作品名稱")
+  });
+  if (!title) {
+    return;
+  }
+
+  const author = await vscode.window.showInputBox({ prompt: "作者（可留空）", value: work.author });
+  const sourceLanguage = await vscode.window.showInputBox({
+    prompt: "原文語言代碼（可留空，例如 en、ja）",
+    value: work.sourceLanguage
+  });
+  const targetLanguage = await vscode.window.showInputBox({
+    prompt: "譯文語言代碼（可留空，例如 zh-TW）",
+    value: work.targetLanguage
+  });
+
+  await store.updateWork(resolvedWorkId, {
+    title: title.trim(),
+    author: author?.trim() || undefined,
+    sourceLanguage: sourceLanguage?.trim() || undefined,
+    targetLanguage: targetLanguage?.trim() || undefined
+  });
+
+  treeProvider.refresh();
+  glossaryTreeProvider.refresh();
+  vscode.window.showInformationMessage(`已更新作品「${title.trim()}」。`);
 }
 
 export async function addChapter(
