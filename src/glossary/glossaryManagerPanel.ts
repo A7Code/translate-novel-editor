@@ -5,9 +5,9 @@ import {
   GlossaryEntryTreeItem,
   GlossaryTreeProvider,
   GlossaryWorkTreeItem
-} from "../views/glossaryTreeProvider";
-import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "../commands/glossaryCommands";
-import { searchGlossary } from "../services/glossarySearch";
+} from "./glossaryTreeProvider";
+import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./glossaryCommands";
+import { searchGlossary } from "./glossarySearch";
 import { safeRun } from "../services/safeRun";
 
 type WebviewMessage =

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
 import { GlossaryEntry } from "../types";
-import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "../views/glossaryTreeProvider";
+import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./glossaryTreeProvider";
 
 export async function addGlossaryEntry(
   store: ProjectStore | undefined,

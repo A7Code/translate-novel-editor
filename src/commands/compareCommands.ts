@@ -2,11 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
 import { CompareView } from "../services/compareView/compareView";
 import { ChapterConfig } from "../types";
-import {
-  COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
-  GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
-  TRANSLATION_LANGUAGE_ID
-} from "../constants";
+import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../constants";
 
 export async function openCompareView(
   store: ProjectStore | undefined,
@@ -68,28 +64,6 @@ export async function toggleCompareLayout(): Promise<void> {
       ? "已切換為「翻譯在左、原文在右」，下次開啟比對畫面時套用。"
       : "已切換為「原文在左、翻譯在右」，下次開啟比對畫面時套用。"
   );
-}
-
-// 設定變更時，把目前所有已開啟、屬於某個章節的原文／譯文分頁立即套用對應語言模式，
-// 不然勾選框切換後要等使用者重新開啟比對畫面才會生效，看起來就像設定沒有作用。
-export async function syncGlossaryAutocompleteLanguageMode(store: ProjectStore | undefined): Promise<void> {
-  if (!store) {
-    return;
-  }
-
-  const enabled = vscode.workspace.getConfiguration().get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true);
-  const targetLanguageId = enabled ? TRANSLATION_LANGUAGE_ID : "plaintext";
-
-  for (const document of vscode.workspace.textDocuments) {
-    if (document.languageId === targetLanguageId) {
-      continue;
-    }
-    const workId = await store.findWorkIdForDocumentUri(document.uri);
-    if (!workId) {
-      continue;
-    }
-    await vscode.languages.setTextDocumentLanguage(document, targetLanguageId);
-  }
 }
 
 async function pickChapter(store: ProjectStore): Promise<ChapterConfig | undefined> {

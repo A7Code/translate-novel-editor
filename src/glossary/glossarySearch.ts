@@ -1,5 +1,5 @@
 import { GlossaryEntry } from "../types";
-import { getInitialPinyin, hasOverlappingReading } from "./pinyinUtil";
+import { getInitialPinyin, hasOverlappingReading } from "../services/pinyinUtil";
 
 export interface GlossaryTextMatch {
   text: string;
