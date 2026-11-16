@@ -37,7 +37,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   const workTreeProvider = new WorkTreeProvider(projectStore, workSidebarState);
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore, glossarySidebarState);
-  const settingsTreeProvider = new SettingsTreeProvider(settingsSidebarState);
+  const settingsTreeProvider = new SettingsTreeProvider(
+    settingsSidebarState,
+    projectStore,
+    glossaryTreeProvider.onDidChangeTreeData
+  );
   const compareView = new CompareView();
   const cursorSyncExtension = new CursorSyncExtension(compareView);
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
@@ -66,11 +70,11 @@ export function activate(context: vscode.ExtensionContext) {
     settingsTreeView,
     settingsTreeView.onDidChangeCheckboxState((event) => {
       for (const [item, state] of event.items) {
-        settingsTreeProvider.handleCheckboxChange(item, state);
+        safeRun(settingsTreeProvider.handleCheckboxChange(item, state), "切換設定核取方塊");
       }
     }),
     vscode.commands.registerCommand(TOGGLE_CHECKBOX_COMMAND_ID, (item: vscode.TreeItem) =>
-      settingsTreeProvider.toggleCheckbox(item)
+      safeRun(settingsTreeProvider.toggleCheckbox(item), "切換設定核取方塊")
     ),
 
     // 記住使用者展開／收合了哪些節點、最後選了哪個項目，下次開啟畫面時套用同樣的狀態。
@@ -214,7 +218,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     try {
       const settingsId = settingsTreeProvider.getLastSelectedId();
-      const item = settingsId ? settingsTreeProvider.findItemById(settingsId) : undefined;
+      const item = settingsId ? await settingsTreeProvider.findItemById(settingsId) : undefined;
       if (item) {
         await settingsTreeView.reveal(item, { select: true, focus: false });
       }
