@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const workTreeProvider = new WorkTreeProvider(projectStore);
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
-  const settingsTreeProvider = new SettingsTreeProvider();
+  const settingsTreeProvider = new SettingsTreeProvider(context.globalState);
   const compareView = new CompareView();
   const cursorSyncExtension = new CursorSyncExtension(compareView);
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
@@ -47,6 +47,18 @@ export function activate(context: vscode.ExtensionContext) {
     settingsTreeView.onDidChangeCheckboxState((event) => {
       for (const [item, state] of event.items) {
         settingsTreeProvider.handleCheckboxChange(item, state);
+      }
+    }),
+
+    // 記住使用者展開／收合了哪些設定群組，下次開啟畫面時套用同樣的狀態。
+    settingsTreeView.onDidExpandElement((event) => {
+      if (event.element.id) {
+        settingsTreeProvider.setGroupExpanded(event.element.id, true);
+      }
+    }),
+    settingsTreeView.onDidCollapseElement((event) => {
+      if (event.element.id) {
+        settingsTreeProvider.setGroupExpanded(event.element.id, false);
       }
     }),
 
