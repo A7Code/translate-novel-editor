@@ -186,7 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
 
     vscode.commands.registerCommand("novelTranslate.openGlossaryManager", (item?: GlossaryWorkTreeItem) =>
-      GlossaryManagerPanel.createOrShow(projectStore, glossaryTreeProvider, item?.work.id)
+      GlossaryManagerPanel.createOrShow(projectStore, workTreeProvider, glossaryTreeProvider, item?.work.id)
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleAutocompleteMode", () => toggleAutocompleteMode()),

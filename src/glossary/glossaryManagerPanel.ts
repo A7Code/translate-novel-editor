@@ -7,6 +7,8 @@ import {
   GlossaryWorkTreeItem
 } from "./glossaryTreeProvider";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./glossaryCommands";
+import { createWork, editWork } from "../work/workCommands";
+import { WorkTreeProvider } from "../work/workTreeProvider";
 import { searchGlossary } from "./glossarySearch";
 import { safeRun } from "../core/safeRun";
 
@@ -16,7 +18,9 @@ type WebviewMessage =
   | { type: "search"; query: string; phonetic: boolean }
   | { type: "add" }
   | { type: "edit"; entryId: string }
-  | { type: "delete"; entryId: string };
+  | { type: "delete"; entryId: string }
+  | { type: "addWork" }
+  | { type: "editWork" };
 
 /**
  * 詞彙表在側邊欄受限於 TreeView，版面太窄放不下常駐搜尋欄。
@@ -28,6 +32,7 @@ export class GlossaryManagerPanel {
 
   static createOrShow(
     store: ProjectStore | undefined,
+    workTreeProvider: WorkTreeProvider,
     treeProvider: GlossaryTreeProvider,
     initialWorkId?: string
   ): void {
@@ -51,7 +56,7 @@ export class GlossaryManagerPanel {
       { enableScripts: true, retainContextWhenHidden: true }
     );
 
-    GlossaryManagerPanel.current = new GlossaryManagerPanel(panel, store, treeProvider, initialWorkId);
+    GlossaryManagerPanel.current = new GlossaryManagerPanel(panel, store, workTreeProvider, treeProvider, initialWorkId);
   }
 
   private readonly disposables: vscode.Disposable[] = [];
@@ -62,6 +67,7 @@ export class GlossaryManagerPanel {
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly store: ProjectStore,
+    private readonly workTreeProvider: WorkTreeProvider,
     private readonly treeProvider: GlossaryTreeProvider,
     initialWorkId?: string
   ) {
@@ -135,6 +141,23 @@ export class GlossaryManagerPanel {
           new GlossaryEntryTreeItem(this.selectedWorkId, entry)
         );
         await this.postEntries();
+        return;
+      }
+      case "addWork": {
+        const work = await createWork(this.store, this.workTreeProvider, this.treeProvider);
+        if (work) {
+          this.selectedWorkId = work.id;
+        }
+        await this.postInit();
+        return;
+      }
+      case "editWork": {
+        if (!this.selectedWorkId) {
+          vscode.window.showErrorMessage("請先選擇作品。");
+          return;
+        }
+        await editWork(this.store, this.workTreeProvider, this.treeProvider, this.selectedWorkId);
+        await this.postInit();
         return;
       }
     }
@@ -304,6 +327,8 @@ export class GlossaryManagerPanel {
 <body>
   <header>
     <select id="workSelect"></select>
+    <button id="addWorkButton" class="secondary" title="新增作品">新增作品</button>
+    <button id="editWorkButton" class="secondary" title="編輯作品">編輯作品</button>
     <input id="searchInput" type="text" placeholder="搜尋原文／譯文..." />
     <button id="phoneticToggle" title="同音比對：找不到完全相符的文字時，改比對讀音（含聲調）是否相同">同音</button>
     <span style="flex: 1 1 auto"></span>
@@ -326,6 +351,8 @@ export class GlossaryManagerPanel {
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const workSelect = document.getElementById("workSelect");
+  const addWorkButton = document.getElementById("addWorkButton");
+  const editWorkButton = document.getElementById("editWorkButton");
   const searchInput = document.getElementById("searchInput");
   const phoneticToggle = document.getElementById("phoneticToggle");
   const addButton = document.getElementById("addButton");
@@ -334,6 +361,14 @@ export class GlossaryManagerPanel {
 
   workSelect.addEventListener("change", () => {
     vscode.postMessage({ type: "selectWork", workId: workSelect.value });
+  });
+
+  addWorkButton.addEventListener("click", () => {
+    vscode.postMessage({ type: "addWork" });
+  });
+
+  editWorkButton.addEventListener("click", () => {
+    vscode.postMessage({ type: "editWork" });
   });
 
   function sendSearch() {
@@ -374,7 +409,8 @@ export class GlossaryManagerPanel {
       option.selected = work.id === selectedWorkId;
       workSelect.appendChild(option);
     }
-    workSelect.hidden = works.length <= 1;
+    workSelect.hidden = works.length === 0;
+    editWorkButton.disabled = works.length === 0;
   }
 
   function renderHighlighted(match) {
