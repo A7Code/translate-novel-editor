@@ -9,7 +9,12 @@ import { CursorSyncExtension } from "./services/compareView/extensions/cursorSyn
 import { ScrollSyncExtension } from "./services/compareView/extensions/scrollSyncExtension";
 import { GlossaryLanguageModeExtension } from "./services/compareView/extensions/glossaryLanguageModeExtension";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
-import { openCompareView, syncGlossaryAutocompleteLanguageMode, toggleCompareLayout } from "./commands/compareCommands";
+import {
+  openCompareView,
+  restoreComparePairIfOpen,
+  syncGlossaryAutocompleteLanguageMode,
+  toggleCompareLayout
+} from "./commands/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
@@ -122,6 +127,33 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   void syncGlossaryAutocompleteLanguageMode(projectStore);
+
+  // 啟動當下 VS Code 可能還沒還原完上次開啟的分頁，所以先嘗試一次，沒找到配對的話
+  // 就繼續監聽可見分頁變化，直到找到為止（找到後立即停止監聽，避免之後重複掃描）。
+  // 這個過程會連鎖觸發游標／捲動同步等功能去操作編輯器，分頁可能還沒完全就緒，
+  // 所以一定要接住例外，不然沒接住的 rejection 可能讓整個 Extension Host 行程掛掉。
+  const tryRestoreComparePair = async (): Promise<boolean> => {
+    try {
+      return await restoreComparePairIfOpen(projectStore, compareView);
+    } catch (error) {
+      console.error("[novelTranslate] 還原比對配對時發生錯誤：", error);
+      return false;
+    }
+  };
+
+  void (async () => {
+    if (await tryRestoreComparePair()) {
+      return;
+    }
+    const retryOnVisibleEditorsChange = vscode.window.onDidChangeVisibleTextEditors(() => {
+      void (async () => {
+        if (await tryRestoreComparePair()) {
+          retryOnVisibleEditorsChange.dispose();
+        }
+      })();
+    });
+    context.subscriptions.push(retryOnVisibleEditorsChange);
+  })();
 }
 
 export function deactivate() {}

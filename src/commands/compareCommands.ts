@@ -29,6 +29,33 @@ export async function openCompareView(
   await compareView.open(originalUri, translationUri);
 }
 
+// VS Code 重新啟動時可能會自動還原上次開啟的分頁，這些分頁並不是透過 openCompareView() 開啟的，
+// 所以 CompareView 的 pair 狀態是空的，導致所有同步相關事件都被忽略，要手動關閉再重開才會恢復正常。
+// 掃描目前所有可見分頁，找出剛好同時開著某一章節原文＋譯文的情況，直接登記成目前的比對配對。
+export async function restoreComparePairIfOpen(
+  store: ProjectStore | undefined,
+  compareView: CompareView
+): Promise<boolean> {
+  if (!store) {
+    return false;
+  }
+
+  const config = await store.load();
+  const visibleUris = new Set(vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString()));
+
+  for (const work of config.works) {
+    for (const chapter of work.chapters) {
+      const originalUri = store.resolveUri(chapter.originalPath);
+      const translationUri = store.resolveUri(chapter.translationPath);
+      if (visibleUris.has(originalUri.toString()) && visibleUris.has(translationUri.toString())) {
+        compareView.adoptPair(originalUri, translationUri);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // 讓使用者透過命令面板（Ctrl+Shift+P）或設置面板的核取方塊切換比對畫面的左右配置，
 // 設定值會立即寫回 workspace，下一次開啟比對畫面時套用新的版面。
 export async function toggleCompareLayout(): Promise<void> {

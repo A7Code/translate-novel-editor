@@ -123,6 +123,20 @@ export class CompareView implements vscode.Disposable {
     this.setPair(originalUri, translationUri);
   }
 
+  // 供啟動時掃描「其實已經開著」的原文／譯文分頁使用（例如 VS Code 自動還原上次開啟的分頁）。
+  // 跟 open() 不同，這裡不會再開一次分頁或重新套用唯讀設定，只是把現有分頁登記成目前的比對配對，
+  // 讓同步相關的擴充功能能夠接手。若已經是同一組配對就不重複觸發事件。
+  adoptPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
+    if (
+      this.pair &&
+      this.pair.originalUri.toString() === originalUri.toString() &&
+      this.pair.translationUri.toString() === translationUri.toString()
+    ) {
+      return;
+    }
+    this.setPair(originalUri, translationUri);
+  }
+
   private setPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
     this.pair = { originalUri, translationUri };
     this._onDidSetPair.fire(this.pair);
