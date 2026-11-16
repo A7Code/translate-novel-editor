@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
-import { CompareView } from "../services/compareView/compareView";
+import { CompareView } from "./compareView";
 import { ChapterConfig } from "../types";
 import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../constants";
 

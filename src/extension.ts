@@ -4,12 +4,12 @@ import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } fro
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
 import { SettingsTreeProvider } from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
-import { CompareView } from "./services/compareView/compareView";
-import { CursorSyncExtension } from "./services/compareView/extensions/cursorSyncExtension";
-import { ScrollSyncExtension } from "./services/compareView/extensions/scrollSyncExtension";
+import { CompareView } from "./compareView/compareView";
+import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
+import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtension";
 import { GlossaryLanguageModeExtension } from "./glossary/integrations/compareViewLanguageMode";
 import { addChapter, createWork, importChapterFile } from "./work/workCommands";
-import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./commands/compareCommands";
+import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./compareView/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./glossary/glossaryCommands";
 import { syncGlossaryAutocompleteLanguageMode, toggleAutocompleteMode } from "./glossary/languageModeCommands";
 import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvider";

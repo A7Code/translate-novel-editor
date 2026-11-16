@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CompareView } from "../../services/compareView/compareView";
+import { CompareView } from "../../compareView/compareView";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../../constants";
 import { safeRun } from "../../services/safeRun";
 

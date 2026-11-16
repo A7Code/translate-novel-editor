@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { ProjectStore } from "../services/projectStore";
-import { CompareView } from "../services/compareView/compareView";
+import { CompareView } from "../compareView/compareView";
 import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
-import { openCompareView } from "../commands/compareCommands";
+import { openCompareView } from "../compareView/compareCommands";
 
 export async function createWork(store: ProjectStore | undefined, treeProvider: WorkTreeProvider): Promise<void> {
   if (!store) {
