@@ -9,3 +9,9 @@ export const COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY = "novelTranslate.compareVi
 // 控制詞彙表自動完成的比對模式："exact"（只比對完全相同的文字前綴）
 // 或 "phonetic"（文字前綴之外，游標前一字同音〔含聲調〕也會推薦）。
 export const GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY = "novelTranslate.glossaryAutocomplete.matchMode";
+
+// 控制「在譯文同一行輸入觸發文字時，推薦原文同一行標點符號」功能是否啟用，預設開啟。
+export const PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY = "novelTranslate.punctuationSuggest.enabled";
+
+// 觸發標點符號推薦用的文字，使用者在譯文那一行輸入到跟這個值完全相同時就會跳出推薦清單。
+export const PUNCTUATION_SUGGEST_TRIGGER_TEXT_SETTING_KEY = "novelTranslate.punctuationSuggest.triggerText";

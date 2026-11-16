@@ -146,6 +146,11 @@
         "category": "小說翻譯"
       },
       {
+        "command": "novelTranslate.suggestPunctuationFromOriginal",
+        "title": "小說翻譯：推薦原文同一行的標點符號",
+        "category": "小說翻譯"
+      },
+      {
         "command": "novelTranslate.submitComment",
         "title": "送出",
         "category": "小說翻譯",
@@ -276,6 +281,14 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "novelTranslate.suggestPunctuationFromOriginal",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "when": "editorTextFocus && resourceLangId == novel-translation"
+      }
+    ],
     "languages": [
       {
         "id": "novel-translation",
@@ -323,6 +336,17 @@
           ],
           "default": "exact",
           "description": "詞彙表自動完成的比對模式。"
+        },
+        "novelTranslate.punctuationSuggest.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "在比對畫面的「譯文」編輯器某一行輸入觸發文字時，是否自動推薦原文同一行出現過的標點符號。"
+        },
+        "novelTranslate.punctuationSuggest.triggerText": {
+          "type": "string",
+          "default": "`",
+          "minLength": 1,
+          "description": "在「譯文」編輯器輸入這段文字時，會跳出原文同一行標點符號的自動完成推薦清單（也可以用下方指定的快捷鍵直接插入並跳出清單）。"
         }
       }
     }

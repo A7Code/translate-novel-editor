@@ -12,7 +12,8 @@ import {
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
-  GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY
+  GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY,
+  PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
 } from "../core/constants";
 
 const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
@@ -20,6 +21,7 @@ const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
 const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
+const PUNCTUATION_SUGGEST_ITEM_ID = "punctuationSuggest.enabled";
 
 // 讓使用者點擊整個設定項目（不只是核取方塊本身）時也能切換開關。
 export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleCheckbox";
@@ -32,16 +34,19 @@ const GLOSSARY_GROUP_ID = "group.glossary";
 // 且會隨 project.json 持久化、下次開啟工作區時自動套用。
 const GLOSSARY_CATEGORY_GROUP_ID = "group.glossaryCategories";
 const GLOSSARY_CATEGORY_WORK_PREFIX = "glossaryCategoryGroup/";
+const PUNCTUATION_SUGGEST_GROUP_ID = "group.punctuationSuggest";
 
 // 各群組底下有哪些設定項目 id，用於 getParent() 往上找父節點。
 const GROUP_ITEM_IDS: Record<string, string[]> = {
   [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
-  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID]
+  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
+  [PUNCTUATION_SUGGEST_GROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID]
 };
 const GROUP_LABELS: Record<string, string> = {
   [COMPARE_VIEW_GROUP_ID]: "比對畫面設定",
   [GLOSSARY_GROUP_ID]: "詞彙表設定",
-  [GLOSSARY_CATEGORY_GROUP_ID]: "是否使用詞語（分類）"
+  [GLOSSARY_CATEGORY_GROUP_ID]: "是否使用詞語（分類）",
+  [PUNCTUATION_SUGGEST_GROUP_ID]: "標點符號推薦設定"
 };
 
 function glossaryCategoryWorkGroupId(workId: string): string {
@@ -102,6 +107,19 @@ class GlossaryPhoneticMatchSettingItem extends vscode.TreeItem {
     this.id = GLOSSARY_PHONETIC_MATCH_ITEM_ID;
     this.tooltip =
       "開啟後，自動完成除了比對完全相同的文字，游標前一個字只要跟詞條首字同音（含聲調）也會推薦，方便修正注音輸入法選錯的同音錯字（例如打「路」也能推薦「露西亞」）。關閉則只比對完全相同的文字。";
+    this.checkboxState = enabled
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
+  }
+}
+
+class PunctuationSuggestSettingItem extends vscode.TreeItem {
+  constructor(enabled: boolean) {
+    super("標點符號推薦", vscode.TreeItemCollapsibleState.None);
+    this.id = PUNCTUATION_SUGGEST_ITEM_ID;
+    this.tooltip =
+      "在比對畫面的「譯文」編輯器某一行輸入觸發文字時（或使用快捷鍵），是否推薦原文同一行出現過的標點符號。觸發文字可以在 VS Code 設定裡的 novelTranslate.punctuationSuggest.triggerText 修改。";
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -179,7 +197,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         event.affectsConfiguration(CURSOR_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY) ||
-        event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY)
+        event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY) ||
+        event.affectsConfiguration(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY)
       ) {
         this.emitter.fire();
       }
@@ -211,7 +230,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
       return [
         this.createGroupItem(COMPARE_VIEW_GROUP_ID),
         this.createGroupItem(GLOSSARY_GROUP_ID),
-        this.createGroupItem(GLOSSARY_CATEGORY_GROUP_ID)
+        this.createGroupItem(GLOSSARY_CATEGORY_GROUP_ID),
+        this.createGroupItem(PUNCTUATION_SUGGEST_GROUP_ID)
       ];
     }
     if (element.id === GLOSSARY_CATEGORY_GROUP_ID) {
@@ -341,6 +361,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         return new GlossaryPhoneticMatchSettingItem(
           config.get<string>(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY, "exact") === "phonetic"
         );
+      case PUNCTUATION_SUGGEST_ITEM_ID:
+        return new PunctuationSuggestSettingItem(config.get<boolean>(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY, true));
       default:
         return undefined;
     }
@@ -382,7 +404,9 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
             ? GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY
             : item.id === TRANSLATION_ON_LEFT_ITEM_ID
               ? COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY
-              : undefined;
+              : item.id === PUNCTUATION_SUGGEST_ITEM_ID
+                ? PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
+                : undefined;
     if (!settingKey) {
       return;
     }
