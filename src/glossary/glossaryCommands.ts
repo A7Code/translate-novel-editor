@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../core/projectStore";
 import { GlossaryEntry } from "../core/types";
-import { UNCATEGORIZED_CATEGORY } from "./glossaryCategories";
+import { collectKnownCategories, UNCATEGORIZED_CATEGORY } from "./glossaryCategories";
 import {
   GlossaryCategoryTreeItem,
   GlossaryEntryTreeItem,
@@ -281,17 +281,10 @@ async function promptGlossaryInput(
 async function promptNewCategoryName(store: ProjectStore, workId: string): Promise<string | undefined> {
   const config = await store.load();
   const work = config.works.find((candidate) => candidate.id === workId);
-
-  const existingCategories = new Set<string>();
-  work?.glossary.forEach((entry) => {
-    const trimmed = entry.category?.trim();
-    if (trimmed) {
-      existingCategories.add(trimmed);
-    }
-  });
+  const knownCategories = new Set(collectKnownCategories(config, work));
 
   const typed = await vscode.window.showInputBox({
-    prompt: "新分類名稱（例如：人名、地名、專有名詞）",
+    prompt: "新分類名稱（例如：人名、地名、專有名詞；跨作品共用，其他作品也能直接選用）",
     validateInput: (value) => (value.trim() ? undefined : "請輸入分類名稱")
   });
   if (!typed) {
@@ -299,7 +292,7 @@ async function promptNewCategoryName(store: ProjectStore, workId: string): Promi
   }
 
   const trimmed = typed.trim();
-  if (existingCategories.has(trimmed)) {
+  if (knownCategories.has(trimmed)) {
     vscode.window.showInformationMessage(`分類「${trimmed}」已經存在，詞條會加入該分類。`);
   }
   return trimmed;
@@ -312,16 +305,7 @@ async function promptCategory(
 ): Promise<string | undefined> {
   const config = await store.load();
   const work = config.works.find((candidate) => candidate.id === workId);
-
-  const existingCategories = new Set<string>();
-  work?.glossary.forEach((entry) => {
-    const trimmed = entry.category?.trim();
-    if (trimmed) {
-      existingCategories.add(trimmed);
-    }
-  });
-
-  const sortedCategories = Array.from(existingCategories).sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  const sortedCategories = collectKnownCategories(config, work);
 
   const CUSTOM_INPUT = Symbol("custom");
   const CLEAR = Symbol("clear");
