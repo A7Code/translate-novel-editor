@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import { ProjectStore } from "../services/projectStore";
-import { WorkTreeItem, WorkTreeProvider } from "../views/workTreeProvider";
+import { WorkTreeItem, WorkTreeProvider } from "../work/workTreeProvider";
 import { applyTranslationToChapterHtml, buildEpubZip, extractParagraphTexts, parseEpub } from "./epubService";
 
 export async function importEpub(store: ProjectStore | undefined, treeProvider: WorkTreeProvider): Promise<void> {

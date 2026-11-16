@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./views/workTreeProvider";
+import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./work/workTreeProvider";
 import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./views/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./panels/glossaryManagerPanel";
 import { SettingsTreeProvider } from "./views/settingsTreeProvider";
@@ -8,7 +8,7 @@ import { CompareView } from "./services/compareView/compareView";
 import { CursorSyncExtension } from "./services/compareView/extensions/cursorSyncExtension";
 import { ScrollSyncExtension } from "./services/compareView/extensions/scrollSyncExtension";
 import { GlossaryLanguageModeExtension } from "./services/compareView/extensions/glossaryLanguageModeExtension";
-import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
+import { addChapter, createWork, importChapterFile } from "./work/workCommands";
 import {
   openCompareView,
   restoreComparePairIfOpen,
