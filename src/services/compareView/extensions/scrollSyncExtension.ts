@@ -9,6 +9,9 @@ const MAX_RETRIES = 3;
 // AtTop 實際落點本來就可能跟要求的行數有些落差（尤其是校正探測、或文件邊界附近），
 // 容忍值要夠寬鬆才不會誤判真正的回音；但又不能寬鬆到把使用者真實的捲動也吃掉。
 const ECHO_MATCH_TOLERANCE = 6;
+// inFlight 記錄超過這個時間還沒收到回音就視為過期（正常情況下回音應該在同一兩個 tick 內抵達）。
+// 用來避免「目標側的回音永遠不會來」時，所有要同步過去的請求永遠卡在 queued 裡、從未真正送出。
+const INFLIGHT_STALE_MS = 500;
 // 控制同步捲動開關的設定鍵，預設開啟。
 export const SCROLL_SYNC_ENABLED_SETTING_KEY = "novelTranslate.compareScrollSync.enabled";
 
@@ -16,6 +19,7 @@ interface InFlightReveal {
   requestedLine: number; // 實際送進 revealRange 的行數（已套用偏差校正）
   desiredLine: number; // 真正想要落在哪一行（校正前，已依文件長度夾過）
   attempts: number;
+  createdAt: number; // Date.now()，用來判斷這筆記錄是否已經過期
 }
 
 // 只有在設定開啟時才向 CompareView 註冊捲動同步的監聽；設定關閉就把訂閱全部取消。
@@ -157,13 +161,13 @@ export class ScrollSyncExtension implements vscode.Disposable {
       return;
     }
 
-    this.inFlight.set(side, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0 });
+    this.inFlight.set(side, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0, createdAt: Date.now() });
     editor.revealRange(new vscode.Range(probeLine, 0, probeLine, 0), vscode.TextEditorRevealType.AtTop);
   }
 
   private handleScroll(sourceSide: CompareSide, topLine: number): void {
     const inFlight = this.inFlight.get(sourceSide);
-    if (inFlight && Math.abs(topLine - inFlight.requestedLine) <= ECHO_MATCH_TOLERANCE) {
+    if (inFlight && !this.isStale(inFlight) && Math.abs(topLine - inFlight.requestedLine) <= ECHO_MATCH_TOLERANCE) {
       // 這是我們自己對 sourceSide 發出的 revealRange 造成的回音，不往回同步到另一側。
       this.inFlight.delete(sourceSide);
       // 用這次乾淨對應的「要求 / 實際落點」更新偏差學習值。
@@ -195,13 +199,24 @@ export class ScrollSyncExtension implements vscode.Disposable {
 
     const desiredLine = Math.min(topLine, Math.max(targetEditor.document.lineCount - 1, 0));
 
-    if (this.inFlight.has(targetSide)) {
-      // 目標還在等待上一筆 revealRange 的回音，先排隊，等那筆回音處理完再套用最新值。
-      this.queued.set(targetSide, desiredLine);
-      return;
+    const targetInFlight = this.inFlight.get(targetSide);
+    if (targetInFlight) {
+      if (!this.isStale(targetInFlight)) {
+        // 目標還在等待上一筆 revealRange 的回音，先排隊，等那筆回音處理完再套用最新值。
+        this.queued.set(targetSide, desiredLine);
+        return;
+      }
+      // 上一筆請求的回音遲遲沒有抵達（例如目標側根本沒辦法捲動到那個探測行），
+      // 繼續排隊只會讓這個要同步的值被永遠蓋掉、從未真正送出，所以直接丟棄過期記錄，
+      // 改成立刻送出這次的請求。
+      this.inFlight.delete(targetSide);
     }
 
     this.requestReveal(targetSide, desiredLine, 0);
+  }
+
+  private isStale(entry: InFlightReveal): boolean {
+    return Date.now() - entry.createdAt > INFLIGHT_STALE_MS;
   }
 
   private requestReveal(side: CompareSide, desiredLine: number, attempts: number): void {
@@ -223,7 +238,7 @@ export class ScrollSyncExtension implements vscode.Disposable {
     const bias = this.bias.get(side) ?? 0;
     const requestedLine = Math.min(Math.max(clampedDesired - bias, 0), maxLine);
 
-    this.inFlight.set(side, { requestedLine, desiredLine: clampedDesired, attempts });
+    this.inFlight.set(side, { requestedLine, desiredLine: clampedDesired, attempts, createdAt: Date.now() });
     editor.revealRange(new vscode.Range(requestedLine, 0, requestedLine, 0), vscode.TextEditorRevealType.AtTop);
   }
 }
