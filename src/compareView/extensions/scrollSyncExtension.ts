@@ -167,7 +167,13 @@ export class ScrollSyncExtension implements vscode.Disposable {
     }
 
     this.inFlight.set(side, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0, createdAt: Date.now() });
-    editor.revealRange(new vscode.Range(probeLine, 0, probeLine, 0), vscode.TextEditorRevealType.AtTop);
+    // editor 是過渡期查出來的參照，實際呼叫 revealRange 前可能已經被 VS Code 處置掉。
+    try {
+      editor.revealRange(new vscode.Range(probeLine, 0, probeLine, 0), vscode.TextEditorRevealType.AtTop);
+    } catch (error) {
+      console.error("[novelTranslate] 捲動校正探測時發生未預期的錯誤：", error);
+      this.inFlight.delete(side);
+    }
   }
 
   // 把目前聚焦側的 topLine 當成同步基準，重新套用一次 handleScroll：
@@ -256,6 +262,13 @@ export class ScrollSyncExtension implements vscode.Disposable {
     const requestedLine = Math.min(Math.max(clampedDesired - bias, 0), maxLine);
 
     this.inFlight.set(side, { requestedLine, desiredLine: clampedDesired, attempts, createdAt: Date.now() });
-    editor.revealRange(new vscode.Range(requestedLine, 0, requestedLine, 0), vscode.TextEditorRevealType.AtTop);
+    // 同上：editor 可能在過渡期被處置掉，revealRange 這類呼叫要接住，不能讓例外
+    // 直接從事件處理流程往外丟。
+    try {
+      editor.revealRange(new vscode.Range(requestedLine, 0, requestedLine, 0), vscode.TextEditorRevealType.AtTop);
+    } catch (error) {
+      console.error("[novelTranslate] 同步捲動位置時發生未預期的錯誤：", error);
+      this.inFlight.delete(side);
+    }
   }
 }

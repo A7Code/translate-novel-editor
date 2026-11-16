@@ -45,6 +45,13 @@ export interface CompareVisibilityEvent {
 export class CompareView implements vscode.Disposable {
   private pair: CompareEditorPair | undefined;
   private focusedSide: CompareSide | undefined;
+  // open() 執行期間（還在 await 開啟分頁、套用唯讀設定）設為 true。這段時間故意把 pair
+  // 清空，讓所有子功能（游標同步、捲動同步……）透過 sideOf()/editorFor() 一律視為「沒有
+  // 在比對」而不做任何事，避免它們對著「舊配對裡、即將被新分頁取代甚至已經關閉」的
+  // TextEditor 物件操作（例如寫入 .selection 或呼叫 .revealRange），那種物件在 VS Code
+  // 內部可能已經處於正在被釋放的過渡狀態，操作它是實際會讓 Extension Host 不穩定、
+  // 甚至讓整個視窗失去回應的來源。
+  private opening = false;
 
   private readonly _onDidSetPair = new vscode.EventEmitter<CompareEditorPair>();
   private readonly _onDidFocusEditor = new vscode.EventEmitter<CompareFocusEvent>();
@@ -98,11 +105,32 @@ export class CompareView implements vscode.Disposable {
 
   constructor() {
     this.subscriptions = [
-      vscode.window.onDidChangeActiveTextEditor((editor) => this.handleActiveEditorChange(editor)),
-      vscode.window.onDidChangeTextEditorSelection((event) => this.handleSelectionChange(event)),
-      vscode.window.onDidChangeTextEditorVisibleRanges((event) => this.handleVisibleRangesChange(event)),
-      vscode.window.onDidChangeVisibleTextEditors(() => this.handleVisibleEditorsChange())
+      vscode.window.onDidChangeActiveTextEditor((editor) =>
+        this.runSafely("onDidChangeActiveTextEditor", () => this.handleActiveEditorChange(editor))
+      ),
+      vscode.window.onDidChangeTextEditorSelection((event) =>
+        this.runSafely("onDidChangeTextEditorSelection", () => this.handleSelectionChange(event))
+      ),
+      vscode.window.onDidChangeTextEditorVisibleRanges((event) =>
+        this.runSafely("onDidChangeTextEditorVisibleRanges", () => this.handleVisibleRangesChange(event))
+      ),
+      vscode.window.onDidChangeVisibleTextEditors(() =>
+        this.runSafely("onDidChangeVisibleTextEditors", () => this.handleVisibleEditorsChange())
+      )
     ];
+  }
+
+  // 這四個事件來自 VS Code 自己（不是我們的 EventEmitter），而且在編輯器還沒就緒、
+  // 分頁正在開啟/替換的過渡狀態下觸發機率最高：這裡面任何一個子功能的訂閱者對著
+  // 過渡期的 TextEditor/TextDocument 操作都可能丟出例外。沒接住的例外會直接穿透回
+  // VS Code 核心派送這個事件的流程，不只影響這個擴充功能，也是讓 Extension Host
+  // 變得不穩定、甚至整個視窗需要重新載入的來源，所以一律接住、記錄，不讓它往外跑。
+  private runSafely(eventName: string, fn: () => void): void {
+    try {
+      fn();
+    } catch (error) {
+      console.error(`[novelTranslate] CompareView 處理 "${eventName}" 時發生未預期的錯誤：`, error);
+    }
   }
 
   get currentPair(): CompareEditorPair | undefined {
@@ -134,31 +162,46 @@ export class CompareView implements vscode.Disposable {
   // 依照設定把原文／譯文開到左右兩側，原文開成唯讀。開啟完成後記住這對視窗，
   // 讓外部擴充功能可以透過上面的事件知道「現在在比對這一對」並開始同步。
   async open(originalUri: vscode.Uri, translationUri: vscode.Uri): Promise<void> {
-    const config = vscode.workspace.getConfiguration();
-    const translationOnLeft = config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true);
-    const originalColumn = translationOnLeft ? vscode.ViewColumn.Two : vscode.ViewColumn.One;
-    const translationColumn = translationOnLeft ? vscode.ViewColumn.One : vscode.ViewColumn.Two;
+    // 從這裡開始到 setPair() 之前都是「主功能還在初始化」的過渡期：先把舊配對清空、
+    // 並標記 opening，讓子功能完全沒有反應（見 pair/opening 的註解），也讓
+    // adoptPair() 在這段期間主動讓路，不要搶著用「現在剛好可見的分頁」設定配對。
+    this.pair = undefined;
+    this.opening = true;
+    try {
+      const config = vscode.workspace.getConfiguration();
+      const translationOnLeft = config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true);
+      const originalColumn = translationOnLeft ? vscode.ViewColumn.Two : vscode.ViewColumn.One;
+      const translationColumn = translationOnLeft ? vscode.ViewColumn.One : vscode.ViewColumn.Two;
 
-    const originalDocument = await vscode.workspace.openTextDocument(originalUri);
-    await vscode.window.showTextDocument(originalDocument, {
-      viewColumn: originalColumn,
-      preview: false
-    });
-    await vscode.commands.executeCommand("workbench.action.files.setActiveEditorReadonlyInSession");
+      const originalDocument = await vscode.workspace.openTextDocument(originalUri);
+      await vscode.window.showTextDocument(originalDocument, {
+        viewColumn: originalColumn,
+        preview: false
+      });
+      await vscode.commands.executeCommand("workbench.action.files.setActiveEditorReadonlyInSession");
 
-    const translationDocument = await vscode.workspace.openTextDocument(translationUri);
-    await vscode.window.showTextDocument(translationDocument, {
-      viewColumn: translationColumn,
-      preview: false
-    });
+      const translationDocument = await vscode.workspace.openTextDocument(translationUri);
+      await vscode.window.showTextDocument(translationDocument, {
+        viewColumn: translationColumn,
+        preview: false
+      });
 
-    this.setPair(originalUri, translationUri);
+      this.setPair(originalUri, translationUri);
+    } finally {
+      this.opening = false;
+    }
   }
 
   // 供啟動時掃描「其實已經開著」的原文／譯文分頁使用（例如 VS Code 自動還原上次開啟的分頁）。
   // 跟 open() 不同，這裡不會再開一次分頁或重新套用唯讀設定，只是把現有分頁登記成目前的比對配對，
   // 讓同步相關的擴充功能能夠接手。若已經是同一組配對就不重複觸發事件。
   adoptPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
+    if (this.opening) {
+      // 有一個 open() 呼叫正在進行中，它結束時會自己呼叫 setPair()；這裡如果搶先設定，
+      // 會跟 open() 最後的 setPair() 對同一組配對重複觸發一次 onDidSetPair，
+      // 讓游標／捲動同步等功能对著还没真正就绪的编辑器多跑一次校正，徒增風險。
+      return;
+    }
     if (
       this.pair &&
       this.pair.originalUri.toString() === originalUri.toString() &&

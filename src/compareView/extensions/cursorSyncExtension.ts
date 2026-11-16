@@ -79,12 +79,19 @@ export class CursorSyncExtension implements vscode.Disposable {
       return;
     }
 
-    const clampedLine = Math.min(Math.max(line, 0), Math.max(targetEditor.document.lineCount - 1, 0));
-    if (targetEditor.selection.isEmpty && targetEditor.selection.active.line === clampedLine) {
-      return;
-    }
+    // targetEditor 是透過 CompareView.editorFor() 從 visibleTextEditors 當下查出來的，
+    // 在分頁正在開啟／替換的過渡期，這個參照可能在拿到之後、實際寫入 selection 之前
+    // 就被 VS Code 內部處置掉，直接操作會丟例外，接住避免波及其他功能。
+    try {
+      const clampedLine = Math.min(Math.max(line, 0), Math.max(targetEditor.document.lineCount - 1, 0));
+      if (targetEditor.selection.isEmpty && targetEditor.selection.active.line === clampedLine) {
+        return;
+      }
 
-    const position = new vscode.Position(clampedLine, 0);
-    targetEditor.selection = new vscode.Selection(position, position);
+      const position = new vscode.Position(clampedLine, 0);
+      targetEditor.selection = new vscode.Selection(position, position);
+    } catch (error) {
+      console.error("[novelTranslate] 同步游標位置時發生未預期的錯誤：", error);
+    }
   }
 }
