@@ -5,6 +5,10 @@ import { CompareSide, CompareView, otherCompareSide } from "../compareView";
 const LINE_TOLERANCE = 1;
 // 單一次同步收到回音後，若還沒落在容許誤差內，最多再補發幾次請求（避免異常情況下無限重試）。
 const MAX_RETRIES = 3;
+// 判斷一筆捲動事件是否為我們自己發出的 revealRange 回音時的誤差容忍值。
+// AtTop 實際落點本來就可能跟要求的行數有些落差（尤其是校正探測、或文件邊界附近），
+// 容忍值要夠寬鬆才不會誤判真正的回音；但又不能寬鬆到把使用者真實的捲動也吃掉。
+const ECHO_MATCH_TOLERANCE = 6;
 // 控制同步捲動開關的設定鍵，預設開啟。
 export const SCROLL_SYNC_ENABLED_SETTING_KEY = "novelTranslate.compareScrollSync.enabled";
 
@@ -159,7 +163,7 @@ export class ScrollSyncExtension implements vscode.Disposable {
 
   private handleScroll(sourceSide: CompareSide, topLine: number): void {
     const inFlight = this.inFlight.get(sourceSide);
-    if (inFlight) {
+    if (inFlight && Math.abs(topLine - inFlight.requestedLine) <= ECHO_MATCH_TOLERANCE) {
       // 這是我們自己對 sourceSide 發出的 revealRange 造成的回音，不往回同步到另一側。
       this.inFlight.delete(sourceSide);
       // 用這次乾淨對應的「要求 / 實際落點」更新偏差學習值。
@@ -174,6 +178,13 @@ export class ScrollSyncExtension implements vscode.Disposable {
         this.requestReveal(sourceSide, inFlight.desiredLine, inFlight.attempts + 1);
       }
       return;
+    }
+
+    if (inFlight) {
+      // 等待中的回音遲遲沒有用接近預期的行數出現（例如校正探測時文件根本沒有捲動成功），
+      // 代表這其實是使用者真正的捲動操作，清掉過期的等待狀態，改走下面正常的同步流程，
+      // 避免往後所有真實捲動都被誤判成回音而永遠同步不到另一側。
+      this.inFlight.delete(sourceSide);
     }
 
     const targetSide = otherCompareSide(sourceSide);
