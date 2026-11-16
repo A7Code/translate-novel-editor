@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { ProjectStore } from "../services/projectStore";
-import { GlossaryEntry, WorkConfig } from "../types";
+import { ProjectStore } from "../core/projectStore";
+import { GlossaryEntry, WorkConfig } from "../core/types";
 
 export class GlossaryWorkTreeItem extends vscode.TreeItem {
   constructor(public readonly work: WorkConfig) {

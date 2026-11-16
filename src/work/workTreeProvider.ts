@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { ProjectStore } from "../services/projectStore";
-import { ChapterConfig, WorkConfig } from "../types";
+import { ProjectStore } from "../core/projectStore";
+import { ChapterConfig, WorkConfig } from "../core/types";
 
 export class WorkTreeItem extends vscode.TreeItem {
   constructor(public readonly work: WorkConfig) {

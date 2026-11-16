@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { CompareView } from "../../compareView/compareView";
-import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../../constants";
-import { safeRun } from "../../services/safeRun";
+import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../../core/constants";
+import { safeRun } from "../../core/safeRun";
 
 // 開啟比對畫面時，是否自動把原文／譯文兩側的分頁切換為詞彙表自動完成語言模式。
 // 只有在設定開啟時才向 CompareView 註冊監聽；設定關閉就取消訂閱。

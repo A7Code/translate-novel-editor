@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { ProjectStore } from "../services/projectStore";
+import { ProjectStore } from "../core/projectStore";
 import { CompareView } from "../compareView/compareView";
 import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
 import { openCompareView } from "../compareView/compareCommands";

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { posix as posixPath } from "node:path";
 import { randomUUID } from "node:crypto";
-import { ChapterConfig, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "../types";
+import { ChapterConfig, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "./types";
 import { getInitialPinyin } from "./pinyinUtil";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";

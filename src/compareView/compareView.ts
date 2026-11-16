@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../constants";
+import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../core/constants";
 
 // 開發除錯用：開啟後每次任何 CompareView 事件觸發時，都會在 console 印出事件名稱、
 // payload 跟目前程式碼庫裡實際訂閱該事件的功能清單。預設關閉，不要常駐開啟。

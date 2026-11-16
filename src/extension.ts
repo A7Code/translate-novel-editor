@@ -3,7 +3,7 @@ import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./work/workTree
 import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./glossary/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
 import { SettingsTreeProvider } from "./settings/settingsTreeProvider";
-import { ProjectStore } from "./services/projectStore";
+import { ProjectStore } from "./core/projectStore";
 import { CompareView } from "./compareView/compareView";
 import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
 import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtension";
@@ -16,8 +16,8 @@ import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvide
 import { NovelCommentController } from "./comments/novelCommentController";
 import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
-import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
-import { safeRun } from "./services/safeRun";
+import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./core/constants";
+import { safeRun } from "./core/safeRun";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];

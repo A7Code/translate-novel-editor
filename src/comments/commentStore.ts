@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { CommentThreadData } from "../types";
-import { ProjectStore } from "../services/projectStore";
+import { CommentThreadData } from "../core/types";
+import { ProjectStore } from "../core/projectStore";
 
 export class CommentStore {
   constructor(private readonly store: ProjectStore | undefined) {}

@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { ProjectStore } from "../services/projectStore";
+import { ProjectStore } from "../core/projectStore";
 import { CompareView } from "./compareView";
-import { ChapterConfig } from "../types";
-import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../constants";
+import { ChapterConfig } from "../core/types";
+import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../core/constants";
 
 export async function openCompareView(
   store: ProjectStore | undefined,

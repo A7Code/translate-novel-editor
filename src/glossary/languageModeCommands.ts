@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../constants";
-import { ProjectStore } from "../services/projectStore";
+import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "../core/constants";
+import { ProjectStore } from "../core/projectStore";
 
 export async function toggleAutocompleteMode(): Promise<void> {
   const editor = vscode.window.activeTextEditor;

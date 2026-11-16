@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { ProjectStore } from "../services/projectStore";
-import { GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY } from "../constants";
-import { getInitialPinyin, hasOverlappingReading } from "../services/pinyinUtil";
+import { ProjectStore } from "../core/projectStore";
+import { GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY } from "../core/constants";
+import { getInitialPinyin, hasOverlappingReading } from "../core/pinyinUtil";
 
 type MatchMode = "exact" | "phonetic";
 

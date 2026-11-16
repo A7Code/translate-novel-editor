@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { ProjectStore } from "../services/projectStore";
-import { GlossaryEntry, WorkConfig } from "../types";
+import { ProjectStore } from "../core/projectStore";
+import { GlossaryEntry, WorkConfig } from "../core/types";
 import {
   GlossaryEntryTreeItem,
   GlossaryTreeProvider,
@@ -8,7 +8,7 @@ import {
 } from "./glossaryTreeProvider";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./glossaryCommands";
 import { searchGlossary } from "./glossarySearch";
-import { safeRun } from "../services/safeRun";
+import { safeRun } from "../core/safeRun";
 
 type WebviewMessage =
   | { type: "ready" }

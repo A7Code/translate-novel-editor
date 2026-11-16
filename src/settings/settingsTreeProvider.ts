@@ -5,7 +5,7 @@ import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY
-} from "../constants";
+} from "../core/constants";
 
 const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
 const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
