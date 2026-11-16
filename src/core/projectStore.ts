@@ -29,6 +29,7 @@ export class ProjectStore {
     } catch {
       this.cache = { version: 1, works: [] };
     }
+    this.cache.categories ??= [];
     for (const work of this.cache.works) {
       work.glossary ??= [];
       work.disabledGlossaryCategories ??= [];
@@ -97,6 +98,7 @@ export class ProjectStore {
       translationInitialPinyin: getInitialPinyin(input.translation)
     };
     work.glossary.push(entry);
+    this.registerCategory(config, entry.category);
     await this.save(config);
     return entry;
   }
@@ -119,8 +121,22 @@ export class ProjectStore {
     entry.note = input.note;
     entry.termInitialPinyin = getInitialPinyin(input.term);
     entry.translationInitialPinyin = getInitialPinyin(input.translation);
+    this.registerCategory(config, entry.category);
     await this.save(config);
     return entry;
+  }
+
+  // 新增／編輯詞條只要填了分類，就記錄進跨作品共用的分類清單，之後其他作品選分類時
+  // 就能直接選用、不用重新輸入（實際清單見 ProjectConfig.categories）。
+  private registerCategory(config: ProjectConfig, category: string | undefined): void {
+    const trimmed = category?.trim();
+    if (!trimmed) {
+      return;
+    }
+    config.categories ??= [];
+    if (!config.categories.includes(trimmed)) {
+      config.categories.push(trimmed);
+    }
   }
 
   async deleteGlossaryEntry(workId: string, entryId: string): Promise<void> {
@@ -142,6 +158,15 @@ export class ProjectStore {
       disabled.add(category);
     }
     work.disabledGlossaryCategories = Array.from(disabled);
+    await this.save(config);
+  }
+
+  // 設定「某作品整體」是否參與自動完成；關閉後不論底下個別分類開關如何都不查詢。
+  // 跟 setGlossaryCategoryEnabled 分屬不同層級、互不取代，同樣存進 project.json 自動持久化。
+  async setWorkGlossaryAutocompleteEnabled(workId: string, enabled: boolean): Promise<void> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    work.glossaryAutocompleteEnabled = enabled;
     await this.save(config);
   }
 

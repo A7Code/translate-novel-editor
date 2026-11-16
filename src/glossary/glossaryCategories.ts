@@ -1,4 +1,4 @@
-import { GlossaryEntry, WorkConfig } from "../core/types";
+import { GlossaryEntry, ProjectConfig, WorkConfig } from "../core/types";
 
 // 詞條沒有填分類時，統一歸到這個群組顯示／設定。
 export const UNCATEGORIZED_CATEGORY = "未分類";
@@ -10,6 +10,26 @@ export function categoryOf(entry: GlossaryEntry): string {
 // 分類預設啟用；只有出現在 disabledGlossaryCategories 裡才視為關閉。
 export function isCategoryEnabled(work: WorkConfig, category: string): boolean {
   return !(work.disabledGlossaryCategories ?? []).includes(category);
+}
+
+// 整個作品的詞彙表預設參與自動完成；只有明確設為 false 才視為關閉，
+// 關閉後不論底下個別分類開關如何都不查詢（由呼叫端自行決定優先順序）。
+export function isWorkGlossaryAutocompleteEnabled(work: WorkConfig): boolean {
+  return work.glossaryAutocompleteEnabled !== false;
+}
+
+// 跨作品共用的分類名稱清單：以專案層級的 categories 為主，再聯集目前這個作品
+// 已經在用、但可能是舊資料（建立這個欄位之前）還沒被記錄進全域清單的分類，
+// 確保不會漏掉既有詞條的分類。
+export function collectKnownCategories(config: ProjectConfig, work?: WorkConfig): string[] {
+  const categories = new Set<string>(config.categories ?? []);
+  for (const entry of work?.glossary ?? []) {
+    const trimmed = entry.category?.trim();
+    if (trimmed) {
+      categories.add(trimmed);
+    }
+  }
+  return Array.from(categories).sort((a, b) => a.localeCompare(b, "zh-Hant"));
 }
 
 export interface GlossaryCategoryCount {

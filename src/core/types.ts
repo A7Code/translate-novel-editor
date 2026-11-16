@@ -37,11 +37,15 @@ export interface WorkConfig {
   epubSource?: EpubSourceInfo;
   /** 這個作品底下被使用者關閉、自動完成時不查詢的詞彙分類名稱（對應 GlossaryEntry.category，未分類固定用「未分類」表示）。 */
   disabledGlossaryCategories?: string[];
+  /** 這個作品的詞彙表是否整體參與自動完成；預設視為 true，設為 false 時不論底下個別分類開關如何都不查詢。 */
+  glossaryAutocompleteEnabled?: boolean;
 }
 
 export interface ProjectConfig {
   version: 1;
   works: WorkConfig[];
+  /** 跨作品共用的詞彙分類名稱清單；新增/編輯詞條填了分類時會自動記錄進來，供其他作品選用，不用重新輸入。 */
+  categories?: string[];
 }
 
 export interface CommentData {
