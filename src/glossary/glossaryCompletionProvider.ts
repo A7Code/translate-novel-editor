@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../core/projectStore";
 import { GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY } from "../core/constants";
 import { getInitialPinyin, hasOverlappingReading } from "../core/pinyinUtil";
-import { categoryOf, isCategoryEnabled } from "./glossaryCategories";
+import { categoryOf, isCategoryEnabled, isWorkGlossaryAutocompleteEnabled } from "./glossaryCategories";
 
 type MatchMode = "exact" | "phonetic";
 
@@ -24,7 +24,7 @@ export class GlossaryCompletionProvider implements vscode.CompletionItemProvider
 
     const config = await this.store.load();
     const work = config.works.find((candidate) => candidate.id === workId);
-    if (!work) {
+    if (!work || !isWorkGlossaryAutocompleteEnabled(work)) {
       return new vscode.CompletionList([], false);
     }
 

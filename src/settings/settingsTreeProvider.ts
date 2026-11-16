@@ -4,7 +4,11 @@ import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/curso
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
-import { getCategoryCountsByUsage, isCategoryEnabled } from "../glossary/glossaryCategories";
+import {
+  getCategoryCountsByUsage,
+  isCategoryEnabled,
+  isWorkGlossaryAutocompleteEnabled
+} from "../glossary/glossaryCategories";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
@@ -118,6 +122,9 @@ class TranslationOnLeftSettingItem extends vscode.TreeItem {
 }
 
 // 「是否使用詞語」群組底下，每個有詞彙的作品各自一個子群組，展開後才是該作品的分類開關。
+// 節點本身也是個核取方塊：這是「作品（大類型）」總開關，關閉後不論底下分類開關如何都
+// 不查詢，跟下一層的分類（小類型）開關分屬不同層級、互不取代，由 GlossaryCompletionProvider
+// 先判斷這個再判斷分類。
 class GlossaryCategoryWorkGroupItem extends vscode.TreeItem {
   readonly workId: string;
 
@@ -127,7 +134,12 @@ class GlossaryCategoryWorkGroupItem extends vscode.TreeItem {
     this.id = glossaryCategoryWorkGroupId(work.id);
     this.contextValue = "settingsGlossaryCategoryWork";
     this.description = `${work.glossary.length} 筆`;
+    this.tooltip = `作品總開關：關閉後，不論底下分類開關如何，自動完成都不會查詢「${work.title}」的詞彙表。`;
     this.iconPath = new vscode.ThemeIcon("book");
+    this.checkboxState = isWorkGlossaryAutocompleteEnabled(work)
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -337,6 +349,12 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
   // 使用者點擊樹狀視圖裡的核取方塊時觸發，依勾選狀態直接寫回設定值。
   async handleCheckboxChange(item: vscode.TreeItem, state: vscode.TreeItemCheckboxState): Promise<void> {
     const checked = state === vscode.TreeItemCheckboxState.Checked;
+
+    if (item instanceof GlossaryCategoryWorkGroupItem) {
+      await this.projectStore?.setWorkGlossaryAutocompleteEnabled(item.workId, checked);
+      this.emitter.fire();
+      return;
+    }
 
     if (item instanceof GlossaryCategoryToggleItem) {
       await this.projectStore?.setGlossaryCategoryEnabled(item.workId, item.category, checked);
