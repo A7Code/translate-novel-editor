@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./work/workTreeProvider";
 import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./views/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./panels/glossaryManagerPanel";
-import { SettingsTreeProvider } from "./views/settingsTreeProvider";
+import { SettingsTreeProvider } from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
 import { CompareView } from "./services/compareView/compareView";
 import { CursorSyncExtension } from "./services/compareView/extensions/cursorSyncExtension";
