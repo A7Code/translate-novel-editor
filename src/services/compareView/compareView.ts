@@ -208,12 +208,25 @@ export class CompareView implements vscode.Disposable {
     if (!side) {
       return;
     }
+    // 只有「目前真正 focus 的那一側」的 selection 變動才算使用者的動作。
+    // 游標同步功能會把目前焦點那一側的行數寫到另一側（非 focus）的 editor.selection，
+    // 這個寫入動作本身也會觸發這裡的事件，若不過濾掉，等於同一次使用者操作會讓
+    // onDidMoveIndex 多餘地觸發第二次（而且是「同步結果」而非「使用者動作」），
+    // 多耗一次所有訂閱者的運算，也是潛在的來回觸發風險。
+    // 在源頭直接擋掉非 focus 側，之後任何新訂閱這個事件的功能都不用再自己處理回音問題。
+    if (event.textEditor !== vscode.window.activeTextEditor) {
+      return;
+    }
     const moveEvent = { side, editor: event.textEditor, line: event.textEditor.selection.active.line };
     this.logFire("onDidMoveIndex", moveEvent);
     this._onDidMoveIndex.fire(moveEvent);
   }
 
   private handleVisibleRangesChange(event: vscode.TextEditorVisibleRangesChangeEvent): void {
+    // 跟 handleSelectionChange 不同，這裡刻意不過濾掉非 focus 側：捲動同步功能需要
+    // 「非 focus 側實際捲到哪一行」這個回音資料來學習 revealRange 的落點偏差，
+    // 並藉此判斷同步是否已經完成；它已經自己用 inFlight／容差比對擋掉回音造成的
+    // 再次往回同步，不會形成無窮迴圈。
     const side = this.sideOf(event.textEditor.document.uri);
     if (!side) {
       return;
