@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import * as os from "node:os";
 import { randomUUID } from "node:crypto";
-import { ProjectStore } from "./projectStore";
+import { ProjectStore } from "../services/projectStore";
 import { CommentStore } from "./commentStore";
 import { CommentThreadData } from "../types";
-import { safeRun } from "./safeRun";
+import { safeRun } from "../services/safeRun";
 
 const CONTROLLER_ID = "novelTranslate.notes";
 const CONTROLLER_LABEL = "小說翻譯筆記";

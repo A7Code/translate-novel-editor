@@ -18,7 +18,8 @@ import {
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
 import { toggleAutocompleteMode } from "./commands/languageModeCommands";
 import { GlossaryCompletionProvider } from "./providers/glossaryCompletionProvider";
-import { NovelCommentController } from "./services/novelCommentController";
+import { NovelCommentController } from "./comments/novelCommentController";
+import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./constants";
 import { safeRun } from "./services/safeRun";
@@ -109,15 +110,15 @@ export function activate(context: vscode.ExtensionContext) {
     ),
 
     vscode.commands.registerCommand("novelTranslate.submitComment", (reply: vscode.CommentReply) =>
-      commentController.submitComment(reply)
+      submitComment(commentController, reply)
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleCommentResolved", (thread: vscode.CommentThread) =>
-      commentController.toggleResolved(thread)
+      toggleCommentResolved(commentController, thread)
     ),
 
     vscode.commands.registerCommand("novelTranslate.deleteCommentThread", (thread: vscode.CommentThread) =>
-      commentController.deleteThread(thread)
+      deleteCommentThread(commentController, thread)
     ),
 
     vscode.commands.registerCommand("novelTranslate.importEpub", () => importEpub(projectStore, workTreeProvider)),
