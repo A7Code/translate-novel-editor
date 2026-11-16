@@ -77,7 +77,7 @@ export class CompareView implements vscode.Disposable {
     ],
     onDidFocusEditor: [],
     onDidBlurEditor: [],
-    onDidMoveIndex: ["cursorSyncExtension.syncTarget"],
+    onDidMoveIndex: ["cursorSyncExtension.syncTarget", "scrollSyncExtension.handleCursorMove"],
     onDidScroll: ["scrollSyncExtension.handleScroll"],
     onDidChangeVisibility: [
       "cursorSyncExtension.syncFromActiveEditor",

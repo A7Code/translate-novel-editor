@@ -98,6 +98,11 @@ export class ScrollSyncExtension implements vscode.Disposable {
     }
     this.syncRegistrations = [
       this.compareView.onDidScroll((event) => this.handleScroll(event.side, event.topLine)),
+      // 游標在可視範圍內移動（沒有觸發真正的捲動）時，兩側的 topLine 理論上早就同步過了，
+      // 這裡只是用同一套 handleScroll 邏輯「重新確認」一次，讓游標所在行跟另一側維持
+      // 相近的相對位置；真的已經同步好的情況下 requestReveal 會直接判斷在容差內而跳過，
+      // 不會造成多餘的捲動或效能負擔。
+      this.compareView.onDidMoveIndex((event) => this.handleCursorMove(event.side)),
       this.compareView.onDidSetPair(() => this.resetAndCalibrate())
     ];
     if (this.compareView.currentPair) {
@@ -163,6 +168,18 @@ export class ScrollSyncExtension implements vscode.Disposable {
 
     this.inFlight.set(side, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0, createdAt: Date.now() });
     editor.revealRange(new vscode.Range(probeLine, 0, probeLine, 0), vscode.TextEditorRevealType.AtTop);
+  }
+
+  // 把目前聚焦側的 topLine 當成同步基準，重新套用一次 handleScroll：
+  // 「讓游標所在行跟對面側維持相近的相對位置」數學上等同於「讓兩側 topLine 保持同步」
+  // （假設兩側文件行號一一對應），所以直接重用同一套邏輯，不用另外重算游標的相對列數。
+  private handleCursorMove(side: CompareSide): void {
+    const editor = this.compareView.editorFor(side);
+    const topLine = editor?.visibleRanges[0]?.start.line;
+    if (topLine === undefined) {
+      return;
+    }
+    this.handleScroll(side, topLine);
   }
 
   private handleScroll(sourceSide: CompareSide, topLine: number): void {
