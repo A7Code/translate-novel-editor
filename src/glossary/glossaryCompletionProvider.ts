@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../core/projectStore";
 import { GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY } from "../core/constants";
 import { getInitialPinyin, hasOverlappingReading } from "../core/pinyinUtil";
+import { categoryOf, isCategoryEnabled } from "./glossaryCategories";
 
 type MatchMode = "exact" | "phonetic";
 
@@ -27,10 +28,13 @@ export class GlossaryCompletionProvider implements vscode.CompletionItemProvider
       return new vscode.CompletionList([], false);
     }
 
+    // 使用者可以在設定裡關閉特定詞彙分類，關閉後自動完成完全不查詢該分類底下的詞條。
+    const enabledEntries = work.glossary.filter((entry) => isCategoryEnabled(work, categoryOf(entry)));
+
     // VS Code 預設的單字邊界判定不會把連續中文切開，導致候選詞的比對前綴
     // 動輒變成一整段文字而永遠比對不到。這裡改用「游標前最後幾個字」自行比對，
     // 不依賴編輯器的單字邊界，每個 CompletionItem 也附上明確的 range/filterText。
-    const maxLookback = work.glossary.reduce(
+    const maxLookback = enabledEntries.reduce(
       (max, entry) => Math.max(max, entry.term.length, entry.translation.length),
       0
     );
@@ -88,7 +92,7 @@ export class GlossaryCompletionProvider implements vscode.CompletionItemProvider
       items.push(item);
     };
 
-    for (const entry of work.glossary) {
+    for (const entry of enabledEntries) {
       const categorySuffix = entry.category ? `（${entry.category}）` : "";
       const documentation = entry.note ? new vscode.MarkdownString(entry.note) : undefined;
       addItem(entry.term, "原文", entry.translation, categorySuffix, documentation, entry.termInitialPinyin);

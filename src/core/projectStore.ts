@@ -31,6 +31,7 @@ export class ProjectStore {
     }
     for (const work of this.cache.works) {
       work.glossary ??= [];
+      work.disabledGlossaryCategories ??= [];
     }
     return this.cache;
   }
@@ -126,6 +127,21 @@ export class ProjectStore {
     const config = await this.load();
     const work = this.findWork(config, workId);
     work.glossary = work.glossary.filter((candidate) => candidate.id !== entryId);
+    await this.save(config);
+  }
+
+  // 設定「某作品底下的某個詞彙分類」是否在自動完成時被查詢，設定值跟作品資料一起存進
+  // project.json，重啟 VS Code 後會自動還原，不需要另外處理持久化。
+  async setGlossaryCategoryEnabled(workId: string, category: string, enabled: boolean): Promise<void> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const disabled = new Set(work.disabledGlossaryCategories ?? []);
+    if (enabled) {
+      disabled.delete(category);
+    } else {
+      disabled.add(category);
+    }
+    work.disabledGlossaryCategories = Array.from(disabled);
     await this.save(config);
   }
 

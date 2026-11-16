@@ -2,13 +2,7 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../core/projectStore";
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { GlossaryEntry, WorkConfig } from "../core/types";
-
-// 詞條沒有填分類時，統一歸到這個群組顯示。
-const UNCATEGORIZED_CATEGORY = "未分類";
-
-function categoryOf(entry: GlossaryEntry): string {
-  return entry.category?.trim() || UNCATEGORIZED_CATEGORY;
-}
+import { categoryOf, UNCATEGORIZED_CATEGORY } from "./glossaryCategories";
 
 export class GlossaryWorkTreeItem extends vscode.TreeItem {
   constructor(public readonly work: WorkConfig, expanded: boolean) {

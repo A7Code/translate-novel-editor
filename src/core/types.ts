@@ -35,6 +35,8 @@ export interface WorkConfig {
   chapters: ChapterConfig[];
   glossary: GlossaryEntry[];
   epubSource?: EpubSourceInfo;
+  /** 這個作品底下被使用者關閉、自動完成時不查詢的詞彙分類名稱（對應 GlossaryEntry.category，未分類固定用「未分類」表示）。 */
+  disabledGlossaryCategories?: string[];
 }
 
 export interface ProjectConfig {
