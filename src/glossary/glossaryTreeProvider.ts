@@ -3,6 +3,13 @@ import { ProjectStore } from "../core/projectStore";
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { GlossaryEntry, WorkConfig } from "../core/types";
 
+// 詞條沒有填分類時，統一歸到這個群組顯示。
+const UNCATEGORIZED_CATEGORY = "未分類";
+
+function categoryOf(entry: GlossaryEntry): string {
+  return entry.category?.trim() || UNCATEGORIZED_CATEGORY;
+}
+
 export class GlossaryWorkTreeItem extends vscode.TreeItem {
   constructor(public readonly work: WorkConfig, expanded: boolean) {
     super(
@@ -16,12 +23,32 @@ export class GlossaryWorkTreeItem extends vscode.TreeItem {
   }
 }
 
+// 詞語類型（分類）群組節點，把同一本作品底下的詞條依分類歸類顯示。
+export class GlossaryCategoryTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly workId: string,
+    public readonly category: string,
+    public readonly entries: readonly GlossaryEntry[],
+    expanded: boolean
+  ) {
+    super(
+      category,
+      expanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed
+    );
+    this.id = `glossary/${workId}/category/${encodeURIComponent(category)}`;
+    this.contextValue = "novelTranslateGlossaryCategory";
+    this.description = `${entries.length} 筆`;
+    this.iconPath = new vscode.ThemeIcon("tag");
+  }
+}
+
 export class GlossaryEntryTreeItem extends vscode.TreeItem {
   constructor(public readonly workId: string, public readonly entry: GlossaryEntry) {
     super(`${entry.term} → ${entry.translation}`, vscode.TreeItemCollapsibleState.None);
     this.id = `glossary/${workId}/${entry.id}`;
     this.contextValue = "novelTranslateGlossaryEntry";
-    this.description = entry.category;
+    // 分類已經由上層群組節點呈現，這裡的淡字改留給備註，方便瀏覽時快速看到註解。
+    this.description = entry.note;
     this.tooltip = entry.note;
     this.iconPath = new vscode.ThemeIcon("symbol-text");
     this.command = {
@@ -32,7 +59,7 @@ export class GlossaryEntryTreeItem extends vscode.TreeItem {
   }
 }
 
-type GlossaryTreeItemUnion = GlossaryWorkTreeItem | GlossaryEntryTreeItem;
+type GlossaryTreeItemUnion = GlossaryWorkTreeItem | GlossaryCategoryTreeItem | GlossaryEntryTreeItem;
 
 export class GlossaryTreeProvider implements vscode.TreeDataProvider<GlossaryTreeItemUnion> {
   private readonly emitter = new vscode.EventEmitter<void>();
@@ -75,7 +102,10 @@ export class GlossaryTreeProvider implements vscode.TreeDataProvider<GlossaryTre
       return config.works.map((work) => this.createWorkItem(work));
     }
     if (element instanceof GlossaryWorkTreeItem) {
-      return element.work.glossary.map((entry) => new GlossaryEntryTreeItem(element.work.id, entry));
+      return this.createCategoryItems(element.work);
+    }
+    if (element instanceof GlossaryCategoryTreeItem) {
+      return element.entries.map((entry) => new GlossaryEntryTreeItem(element.workId, entry));
     }
     return [];
   }
@@ -83,14 +113,20 @@ export class GlossaryTreeProvider implements vscode.TreeDataProvider<GlossaryTre
   // reveal() 還原選取狀態時，VS Code 會用這個方法往上找出完整的父節點鏈。
   async getParent(element: GlossaryTreeItemUnion): Promise<GlossaryTreeItemUnion | undefined> {
     if (element instanceof GlossaryEntryTreeItem) {
-      const config = await this.store?.load();
-      const work = config?.works.find((candidate) => candidate.id === element.workId);
+      const work = await this.findWork(element.workId);
+      if (!work) {
+        return undefined;
+      }
+      return this.createCategoryItems(work).find((item) => item.category === categoryOf(element.entry));
+    }
+    if (element instanceof GlossaryCategoryTreeItem) {
+      const work = await this.findWork(element.workId);
       return work ? this.createWorkItem(work) : undefined;
     }
     return undefined;
   }
 
-  // 依照初始化時還原選取用的 id，找回對應的節點實例（可能是作品或詞條）。
+  // 依照初始化時還原選取用的 id，找回對應的節點實例（可能是作品、分類群組或詞條）。
   async findItemById(id: string): Promise<GlossaryTreeItemUnion | undefined> {
     if (!this.store) {
       return undefined;
@@ -100,6 +136,10 @@ export class GlossaryTreeProvider implements vscode.TreeDataProvider<GlossaryTre
       if (`glossary/${work.id}` === id) {
         return this.createWorkItem(work);
       }
+      const categoryItem = this.createCategoryItems(work).find((item) => item.id === id);
+      if (categoryItem) {
+        return categoryItem;
+      }
       const entry = work.glossary.find((candidate) => `glossary/${work.id}/${candidate.id}` === id);
       if (entry) {
         return new GlossaryEntryTreeItem(work.id, entry);
@@ -108,7 +148,42 @@ export class GlossaryTreeProvider implements vscode.TreeDataProvider<GlossaryTre
     return undefined;
   }
 
+  private async findWork(workId: string): Promise<WorkConfig | undefined> {
+    const config = await this.store?.load();
+    return config?.works.find((candidate) => candidate.id === workId);
+  }
+
   private createWorkItem(work: WorkConfig): GlossaryWorkTreeItem {
     return new GlossaryWorkTreeItem(work, this.stateStore.isExpanded(`glossary/${work.id}`));
+  }
+
+  // 依分類把作品底下的詞條分組；未填分類的歸到「未分類」，依分類名稱排序（未分類排最後）。
+  private createCategoryItems(work: WorkConfig): GlossaryCategoryTreeItem[] {
+    const grouped = new Map<string, GlossaryEntry[]>();
+    for (const entry of work.glossary) {
+      const category = categoryOf(entry);
+      const entries = grouped.get(category);
+      if (entries) {
+        entries.push(entry);
+      } else {
+        grouped.set(category, [entry]);
+      }
+    }
+
+    const categories = Array.from(grouped.keys()).sort((a, b) => {
+      if (a === UNCATEGORIZED_CATEGORY) {
+        return 1;
+      }
+      if (b === UNCATEGORIZED_CATEGORY) {
+        return -1;
+      }
+      return a.localeCompare(b, "zh-Hant");
+    });
+
+    return categories.map((category) => {
+      const entries = grouped.get(category)!;
+      const id = `glossary/${work.id}/category/${encodeURIComponent(category)}`;
+      return new GlossaryCategoryTreeItem(work.id, category, entries, this.stateStore.isExpanded(id));
+    });
   }
 }
