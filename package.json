@@ -107,6 +107,18 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "novelTranslate.addGlossaryCategory",
+        "title": "小說翻譯：新增詞彙分類",
+        "category": "小說翻譯",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "novelTranslate.addGlossaryEntryToCategory",
+        "title": "小說翻譯：在此分類新增詞條",
+        "category": "小說翻譯",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "novelTranslate.editGlossaryEntry",
         "title": "小說翻譯：編輯詞條",
         "category": "小說翻譯"
@@ -207,6 +219,16 @@
         {
           "command": "novelTranslate.addGlossaryEntry",
           "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryWork",
+          "group": "inline@1"
+        },
+        {
+          "command": "novelTranslate.addGlossaryCategory",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryWork",
+          "group": "inline@2"
+        },
+        {
+          "command": "novelTranslate.addGlossaryEntryToCategory",
+          "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryCategory",
           "group": "inline"
         },
         {

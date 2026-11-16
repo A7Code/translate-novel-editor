@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./work/workTreeProvider";
-import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./glossary/glossaryTreeProvider";
+import {
+  GlossaryCategoryTreeItem,
+  GlossaryEntryTreeItem,
+  GlossaryTreeProvider,
+  GlossaryWorkTreeItem
+} from "./glossary/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
 import { SettingsTreeProvider, TOGGLE_CHECKBOX_COMMAND_ID } from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./core/projectStore";
@@ -10,7 +15,13 @@ import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtensio
 import { GlossaryLanguageModeExtension } from "./glossary/integrations/compareViewLanguageMode";
 import { addChapter, createWork, importChapterFile } from "./work/workCommands";
 import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./compareView/compareCommands";
-import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./glossary/glossaryCommands";
+import {
+  addGlossaryCategory,
+  addGlossaryEntry,
+  addGlossaryEntryToCategory,
+  deleteGlossaryEntry,
+  editGlossaryEntry
+} from "./glossary/glossaryCommands";
 import { syncGlossaryAutocompleteLanguageMode, toggleAutocompleteMode } from "./glossary/languageModeCommands";
 import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvider";
 import { NovelCommentController } from "./comments/novelCommentController";
@@ -150,6 +161,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.addGlossaryEntry", (item?: GlossaryWorkTreeItem) =>
       addGlossaryEntry(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.addGlossaryCategory", (item?: GlossaryWorkTreeItem) =>
+      addGlossaryCategory(projectStore, glossaryTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.addGlossaryEntryToCategory", (item: GlossaryCategoryTreeItem) =>
+      addGlossaryEntryToCategory(projectStore, glossaryTreeProvider, item)
     ),
 
     vscode.commands.registerCommand("novelTranslate.editGlossaryEntry", (item?: GlossaryEntryTreeItem) =>

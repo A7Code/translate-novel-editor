@@ -1,7 +1,13 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../core/projectStore";
 import { GlossaryEntry } from "../core/types";
-import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./glossaryTreeProvider";
+import { UNCATEGORIZED_CATEGORY } from "./glossaryCategories";
+import {
+  GlossaryCategoryTreeItem,
+  GlossaryEntryTreeItem,
+  GlossaryTreeProvider,
+  GlossaryWorkTreeItem
+} from "./glossaryTreeProvider";
 
 export async function addGlossaryEntry(
   store: ProjectStore | undefined,
@@ -29,6 +35,46 @@ export async function addGlossaryEntry(
   }
 
   await runAddFlow(store, treeProvider, workId, selectedTerm);
+}
+
+// 「新增分類」：先輸入全新的分類名稱，再直接進入新增詞條流程，分類已鎖定不會再跳出分類選單。
+// 分類本身是依詞條動態產生、沒有獨立儲存，所以「建立分類」實際上等同於「建立這個分類底下的第一筆詞條」。
+export async function addGlossaryCategory(
+  store: ProjectStore | undefined,
+  treeProvider: GlossaryTreeProvider,
+  item?: GlossaryWorkTreeItem
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const workId = item ? item.work.id : await resolveWorkId(store);
+  if (!workId) {
+    return;
+  }
+
+  const category = await promptNewCategoryName(store, workId);
+  if (category === undefined) {
+    return;
+  }
+
+  await runAddFlow(store, treeProvider, workId, getSelectedText(), { value: category });
+}
+
+// 「新增詞條」（分類節點上的按鈕）：分類已經由點擊的節點決定，直接進新增詞條流程，不用再選一次分類。
+export async function addGlossaryEntryToCategory(
+  store: ProjectStore | undefined,
+  treeProvider: GlossaryTreeProvider,
+  item: GlossaryCategoryTreeItem
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const fixedCategory = item.category === UNCATEGORIZED_CATEGORY ? undefined : item.category;
+  await runAddFlow(store, treeProvider, item.workId, getSelectedText(), { value: fixedCategory });
 }
 
 export async function editGlossaryEntry(
@@ -125,12 +171,14 @@ async function runAddFlow(
   store: ProjectStore,
   treeProvider: GlossaryTreeProvider,
   workId: string,
-  prefillTerm?: string
+  prefillTerm?: string,
+  fixedCategory?: { value: string | undefined }
 ): Promise<void> {
   const input = await promptGlossaryInput(
     store,
     workId,
-    prefillTerm ? { term: prefillTerm, translation: "" } : undefined
+    prefillTerm ? { term: prefillTerm, translation: "" } : undefined,
+    fixedCategory
   );
   if (!input) {
     return;
@@ -192,7 +240,8 @@ async function promptGlossaryInput(
     translation: string;
     category?: string;
     note?: string;
-  }
+  },
+  fixedCategory?: { value: string | undefined }
 ): Promise<{ term: string; translation: string; category?: string; note?: string } | undefined> {
   const term = await vscode.window.showInputBox({
     prompt: "原文詞彙",
@@ -212,7 +261,9 @@ async function promptGlossaryInput(
     return undefined;
   }
 
-  const category = await promptCategory(store, workId, existing?.category);
+  // fixedCategory 有值時代表分類已經由呼叫端決定（新增分類／在分類節點新增詞條），
+  // 不用再跳一次分類選單；否則維持原本讓使用者從現有分類挑選或自行輸入的流程。
+  const category = fixedCategory ? fixedCategory.value : await promptCategory(store, workId, existing?.category);
 
   const note = await vscode.window.showInputBox({
     prompt: "備註（可留空）",
@@ -225,6 +276,33 @@ async function promptGlossaryInput(
     category: category?.trim() || undefined,
     note: note?.trim() || undefined
   };
+}
+
+async function promptNewCategoryName(store: ProjectStore, workId: string): Promise<string | undefined> {
+  const config = await store.load();
+  const work = config.works.find((candidate) => candidate.id === workId);
+
+  const existingCategories = new Set<string>();
+  work?.glossary.forEach((entry) => {
+    const trimmed = entry.category?.trim();
+    if (trimmed) {
+      existingCategories.add(trimmed);
+    }
+  });
+
+  const typed = await vscode.window.showInputBox({
+    prompt: "新分類名稱（例如：人名、地名、專有名詞）",
+    validateInput: (value) => (value.trim() ? undefined : "請輸入分類名稱")
+  });
+  if (!typed) {
+    return undefined;
+  }
+
+  const trimmed = typed.trim();
+  if (existingCategories.has(trimmed)) {
+    vscode.window.showInformationMessage(`分類「${trimmed}」已經存在，詞條會加入該分類。`);
+  }
+  return trimmed;
 }
 
 async function promptCategory(
