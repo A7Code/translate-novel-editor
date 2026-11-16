@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { WorkTreeProvider, ChapterTreeItem, WorkTreeItem } from "./work/workTreeProvider";
 import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } from "./glossary/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
-import { SettingsTreeProvider } from "./settings/settingsTreeProvider";
+import { SettingsTreeProvider, TOGGLE_CHECKBOX_COMMAND_ID } from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./core/projectStore";
 import { CompareView } from "./compareView/compareView";
 import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
@@ -49,6 +49,9 @@ export function activate(context: vscode.ExtensionContext) {
         settingsTreeProvider.handleCheckboxChange(item, state);
       }
     }),
+    vscode.commands.registerCommand(TOGGLE_CHECKBOX_COMMAND_ID, (item: vscode.TreeItem) =>
+      settingsTreeProvider.toggleCheckbox(item)
+    ),
 
     // 記住使用者展開／收合了哪些設定群組，下次開啟畫面時套用同樣的狀態。
     settingsTreeView.onDidExpandElement((event) => {

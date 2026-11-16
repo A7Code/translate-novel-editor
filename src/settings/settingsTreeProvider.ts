@@ -13,6 +13,9 @@ const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
 
+// 讓使用者點擊整個設定項目（不只是核取方塊本身）時也能切換開關。
+export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleCheckbox";
+
 // 群組節點的 id，同時也是記住展開狀態用的 key。
 const COMPARE_VIEW_GROUP_ID = "group.compareView";
 const GLOSSARY_GROUP_ID = "group.glossary";
@@ -39,6 +42,7 @@ class ScrollSyncSettingItem extends vscode.TreeItem {
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -50,6 +54,7 @@ class CursorSyncSettingItem extends vscode.TreeItem {
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -61,6 +66,7 @@ class GlossaryAutocompleteSettingItem extends vscode.TreeItem {
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -73,6 +79,7 @@ class GlossaryPhoneticMatchSettingItem extends vscode.TreeItem {
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -84,6 +91,7 @@ class TranslationOnLeftSettingItem extends vscode.TreeItem {
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
   }
 }
 
@@ -194,5 +202,14 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
       return;
     }
     void vscode.workspace.getConfiguration().update(settingKey, checked, vscode.ConfigurationTarget.Global);
+  }
+
+  // 使用者點擊設定項目本身（非核取方塊）時觸發，依目前勾選狀態反轉後套用同一套邏輯。
+  toggleCheckbox(item: vscode.TreeItem): void {
+    const next =
+      item.checkboxState === vscode.TreeItemCheckboxState.Checked
+        ? vscode.TreeItemCheckboxState.Unchecked
+        : vscode.TreeItemCheckboxState.Checked;
+    this.handleCheckboxChange(item, next);
   }
 }
