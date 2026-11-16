@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import { COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY } from "../../constants";
 
+// 開發除錯用：開啟後每次任何 CompareView 事件觸發時，都會在 console 印出事件名稱、
+// payload 跟目前程式碼庫裡實際訂閱該事件的功能清單。預設關閉，不要常駐開啟。
+const DEBUG_LOG_EVENTS = false;
+
 export type CompareSide = "original" | "translation";
 
 export function otherCompareSide(side: CompareSide): CompareSide {
@@ -63,6 +67,34 @@ export class CompareView implements vscode.Disposable {
   readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 
   private readonly subscriptions: vscode.Disposable[];
+
+  // 目前程式碼庫裡實際訂閱各事件的功能清單（手動維護，供 DEBUG_LOG_EVENTS 開啟時的 console 輸出對照）。
+  private static readonly REGISTERED_FEATURES: Record<string, string[]> = {
+    onDidSetPair: [
+      "cursorSyncExtension.syncFromActiveEditor",
+      "scrollSyncExtension.resetAndCalibrate",
+      "glossaryLanguageModeExtension (registration handler)"
+    ],
+    onDidFocusEditor: [],
+    onDidBlurEditor: [],
+    onDidMoveIndex: ["cursorSyncExtension.syncTarget"],
+    onDidScroll: ["scrollSyncExtension.handleScroll"],
+    onDidChangeVisibility: [
+      "cursorSyncExtension.syncFromActiveEditor",
+      "scrollSyncExtension (visibilitySubscription handler)"
+    ]
+  };
+
+  private logFire(eventName: keyof typeof CompareView.REGISTERED_FEATURES, payload: unknown): void {
+    if (!DEBUG_LOG_EVENTS) {
+      return;
+    }
+    const features = CompareView.REGISTERED_FEATURES[eventName];
+    console.log(`[CompareView] fired "${eventName}"`, {
+      payload,
+      registeredFeatures: features.length > 0 ? features : "(none)"
+    });
+  }
 
   constructor() {
     this.subscriptions = [
@@ -139,6 +171,7 @@ export class CompareView implements vscode.Disposable {
 
   private setPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
     this.pair = { originalUri, translationUri };
+    this.logFire("onDidSetPair", this.pair);
     this._onDidSetPair.fire(this.pair);
     this.fireVisibilitySnapshot();
   }
@@ -158,11 +191,15 @@ export class CompareView implements vscode.Disposable {
   private handleActiveEditorChange(editor: vscode.TextEditor | undefined): void {
     const newSide = editor ? this.sideOf(editor.document.uri) : undefined;
     if (this.focusedSide && this.focusedSide !== newSide) {
-      this._onDidBlurEditor.fire({ side: this.focusedSide, editor: this.editorFor(this.focusedSide) });
+      const blurEvent = { side: this.focusedSide, editor: this.editorFor(this.focusedSide) };
+      this.logFire("onDidBlurEditor", blurEvent);
+      this._onDidBlurEditor.fire(blurEvent);
     }
     this.focusedSide = newSide;
     if (newSide && editor) {
-      this._onDidFocusEditor.fire({ side: newSide, editor });
+      const focusEvent = { side: newSide, editor };
+      this.logFire("onDidFocusEditor", focusEvent);
+      this._onDidFocusEditor.fire(focusEvent);
     }
   }
 
@@ -171,7 +208,9 @@ export class CompareView implements vscode.Disposable {
     if (!side) {
       return;
     }
-    this._onDidMoveIndex.fire({ side, editor: event.textEditor, line: event.textEditor.selection.active.line });
+    const moveEvent = { side, editor: event.textEditor, line: event.textEditor.selection.active.line };
+    this.logFire("onDidMoveIndex", moveEvent);
+    this._onDidMoveIndex.fire(moveEvent);
   }
 
   private handleVisibleRangesChange(event: vscode.TextEditorVisibleRangesChangeEvent): void {
@@ -183,7 +222,9 @@ export class CompareView implements vscode.Disposable {
     if (topLine === undefined) {
       return;
     }
-    this._onDidScroll.fire({ side, editor: event.textEditor, topLine, visibleRanges: event.visibleRanges });
+    const scrollEvent = { side, editor: event.textEditor, topLine, visibleRanges: event.visibleRanges };
+    this.logFire("onDidScroll", scrollEvent);
+    this._onDidScroll.fire(scrollEvent);
   }
 
   private handleVisibleEditorsChange(): void {
@@ -201,6 +242,8 @@ export class CompareView implements vscode.Disposable {
     const translationVisible = editors.some(
       (editor) => editor.document.uri.toString() === this.pair!.translationUri.toString()
     );
-    this._onDidChangeVisibility.fire({ originalVisible, translationVisible });
+    const visibilityEvent = { originalVisible, translationVisible };
+    this.logFire("onDidChangeVisibility", visibilityEvent);
+    this._onDidChangeVisibility.fire(visibilityEvent);
   }
 }
