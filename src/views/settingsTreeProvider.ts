@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../services/compareScrollSync";
-import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../services/compareCursorSync";
+import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../services/compareView/extensions/scrollSyncExtension";
+import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../services/compareView/extensions/cursorSyncExtension";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,

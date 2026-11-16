@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { CompareSide, CompareView, otherCompareSide } from "../compareView";
 
 // 使用者可以接受的行數誤差（AtTop 的實際落點不保證跟要求的行數完全一致）。
 const LINE_TOLERANCE = 1;
@@ -13,53 +14,44 @@ interface InFlightReveal {
   attempts: number;
 }
 
-export class CompareScrollSync implements vscode.Disposable {
-  private originalUri: string | undefined;
-  private translationUri: string | undefined;
+// 只有在設定開啟時才向 CompareView 註冊捲動同步的監聽；設定關閉就把訂閱全部取消。
+// 狀態列的開關按鈕例外：即使同步關閉也要讓使用者看得到、能點擊切換，所以它的可見度追蹤
+// 不受這個啟用／停用的控管，一律跟著 CompareView 的配對可見度即時更新。
+export class ScrollSyncExtension implements vscode.Disposable {
   private enabled: boolean;
   private readonly statusBarItem: vscode.StatusBarItem;
-  private readonly subscription: vscode.Disposable;
   private readonly visibilitySubscription: vscode.Disposable;
   private readonly configSubscription: vscode.Disposable;
-  // 每個 uri 同時間最多只有一筆「尚未收到回音」的 revealRange 請求。
-  private readonly inFlight = new Map<string, InFlightReveal>();
+  private syncRegistrations: vscode.Disposable[] = [];
+  // 每一側同時間最多只有一筆「尚未收到回音」的 revealRange 請求。
+  private readonly inFlight = new Map<CompareSide, InFlightReveal>();
   // 回音抵達前，若又有更新的需求進來，先排隊，等回音處理完才套用最新值，
-  // 避免同時對同一個 uri 疊加發出多筆請求（回音跟請求會對不上，越修正誤差越大）。
-  private readonly queued = new Map<string, number>();
+  // 避免同時對同一側疊加發出多筆請求（回音跟請求會對不上，越修正誤差越大）。
+  private readonly queued = new Map<CompareSide, number>();
   // 持續學習 revealRange(AtTop) 實際落點跟要求行數之間的偏差，每次乾淨的回音都會更新，
   // 之後每一次請求（包含排隊中的）都會先扣掉這個偏差，讓結果即使在連續捲動中也能收斂。
-  private readonly bias = new Map<string, number>();
+  private readonly bias = new Map<CompareSide, number>();
 
-  constructor() {
+  constructor(private readonly compareView: CompareView) {
     this.enabled = this.readEnabledSetting();
 
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.statusBarItem.command = "novelTranslate.toggleScrollSync";
     this.updateStatusBarText();
 
-    this.subscription = vscode.window.onDidChangeTextEditorVisibleRanges((event) => this.handleChange(event));
-    this.visibilitySubscription = vscode.window.onDidChangeVisibleTextEditors(() => this.updateStatusBarVisibility());
+    this.visibilitySubscription = this.compareView.onDidChangeVisibility((event) =>
+      this.updateStatusBarVisibility(event.originalVisible || event.translationVisible)
+    );
+
     this.configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY)) {
         this.handleEnabledSettingChanged();
       }
     });
-  }
-
-  setPair(originalUri: vscode.Uri, translationUri: vscode.Uri): void {
-    this.originalUri = originalUri.toString();
-    this.translationUri = translationUri.toString();
-    this.inFlight.clear();
-    this.queued.clear();
-    this.bias.clear();
 
     if (this.enabled) {
-      // 一開啟就先預熱偏差學習值，使用者不用先捲動個幾次「暖身」才會開始準確同步。
-      this.calibrate(this.originalUri);
-      this.calibrate(this.translationUri);
+      this.activate();
     }
-
-    this.updateStatusBarVisibility();
   }
 
   // 使用者透過命令面板或狀態列按鈕切換同步捲動開關。
@@ -67,6 +59,13 @@ export class CompareScrollSync implements vscode.Disposable {
     void vscode.workspace
       .getConfiguration()
       .update(SCROLL_SYNC_ENABLED_SETTING_KEY, !this.enabled, vscode.ConfigurationTarget.Global);
+  }
+
+  dispose(): void {
+    this.visibilitySubscription.dispose();
+    this.configSubscription.dispose();
+    this.deactivate();
+    this.statusBarItem.dispose();
   }
 
   private readEnabledSetting(): boolean {
@@ -78,11 +77,36 @@ export class CompareScrollSync implements vscode.Disposable {
     this.enabled = this.readEnabledSetting();
     this.updateStatusBarText();
 
-    if (this.enabled && !wasEnabled && this.originalUri && this.translationUri) {
-      // 從關閉切回開啟時，重新預熱偏差學習值，不用等使用者先捲動暖身。
-      this.calibrate(this.originalUri);
-      this.calibrate(this.translationUri);
+    if (this.enabled && !wasEnabled) {
+      this.activate();
+    } else if (!this.enabled && wasEnabled) {
+      this.deactivate();
     }
+  }
+
+  private activate(): void {
+    if (this.syncRegistrations.length > 0) {
+      return;
+    }
+    this.syncRegistrations = [
+      this.compareView.onDidScroll((event) => this.handleScroll(event.side, event.topLine)),
+      this.compareView.onDidSetPair(() => this.resetAndCalibrate())
+    ];
+    if (this.compareView.currentPair) {
+      // 從關閉切回開啟、或比對畫面早已開著時重新啟用，都要重新預熱偏差學習值，
+      // 不用等使用者先捲動暖身。
+      this.resetAndCalibrate();
+    }
+  }
+
+  private deactivate(): void {
+    for (const registration of this.syncRegistrations) {
+      registration.dispose();
+    }
+    this.syncRegistrations = [];
+    this.inFlight.clear();
+    this.queued.clear();
+    this.bias.clear();
   }
 
   private updateStatusBarText(): void {
@@ -91,12 +115,7 @@ export class CompareScrollSync implements vscode.Disposable {
   }
 
   // 只在原文／譯文其中一側正顯示於畫面上時才顯示狀態列按鈕，避免跟比對無關時也佔用狀態列。
-  private updateStatusBarVisibility(): void {
-    const pairUris = [this.originalUri, this.translationUri];
-    const isComparing = vscode.window.visibleTextEditors.some((editor) =>
-      pairUris.includes(editor.document.uri.toString())
-    );
-
+  private updateStatusBarVisibility(isComparing: boolean): void {
     if (isComparing) {
       this.statusBarItem.show();
     } else {
@@ -104,11 +123,19 @@ export class CompareScrollSync implements vscode.Disposable {
     }
   }
 
+  private resetAndCalibrate(): void {
+    this.inFlight.clear();
+    this.queued.clear();
+    this.bias.clear();
+    this.calibrate("original");
+    this.calibrate("translation");
+  }
+
   // 刻意把畫面跳到遠離目前位置的探測行數，量出 revealRange(AtTop) 的實際落點偏差，
   // 再用剛學到的偏差把畫面準確地跳回原本的位置。使用者感覺不到這個過程（瞬間完成），
   // 但往後第一次真正捲動時，偏差值就已經準備好了。
-  private calibrate(uri: string): void {
-    const editor = vscode.window.visibleTextEditors.find((candidate) => candidate.document.uri.toString() === uri);
+  private calibrate(side: CompareSide): void {
+    const editor = this.compareView.editorFor(side);
     if (!editor) {
       return;
     }
@@ -126,76 +153,48 @@ export class CompareScrollSync implements vscode.Disposable {
       return;
     }
 
-    this.inFlight.set(uri, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0 });
+    this.inFlight.set(side, { requestedLine: probeLine, desiredLine: currentLine, attempts: 0 });
     editor.revealRange(new vscode.Range(probeLine, 0, probeLine, 0), vscode.TextEditorRevealType.AtTop);
   }
 
-  dispose(): void {
-    this.subscription.dispose();
-    this.visibilitySubscription.dispose();
-    this.configSubscription.dispose();
-    this.statusBarItem.dispose();
-  }
-
-  private handleChange(event: vscode.TextEditorVisibleRangesChangeEvent): void {
-    if (!this.enabled || !this.originalUri || !this.translationUri) {
-      return;
-    }
-
-    const sourceUri = event.textEditor.document.uri.toString();
-    const topLine = event.visibleRanges[0]?.start.line;
-    if (topLine === undefined) {
-      return;
-    }
-
-    const inFlight = this.inFlight.get(sourceUri);
+  private handleScroll(sourceSide: CompareSide, topLine: number): void {
+    const inFlight = this.inFlight.get(sourceSide);
     if (inFlight) {
-      // 這是我們自己對 sourceUri 發出的 revealRange 造成的回音，不往回同步到另一側。
-      this.inFlight.delete(sourceUri);
+      // 這是我們自己對 sourceSide 發出的 revealRange 造成的回音，不往回同步到另一側。
+      this.inFlight.delete(sourceSide);
       // 用這次乾淨對應的「要求 / 實際落點」更新偏差學習值。
-      this.bias.set(sourceUri, topLine - inFlight.requestedLine);
+      this.bias.set(sourceSide, topLine - inFlight.requestedLine);
 
-      const queuedLine = this.queued.get(sourceUri);
-      this.queued.delete(sourceUri);
+      const queuedLine = this.queued.get(sourceSide);
+      this.queued.delete(sourceSide);
       if (queuedLine !== undefined) {
-        this.requestReveal(sourceUri, queuedLine, 0);
+        this.requestReveal(sourceSide, queuedLine, 0);
       } else if (Math.abs(topLine - inFlight.desiredLine) > LINE_TOLERANCE && inFlight.attempts < MAX_RETRIES) {
         // 沒有新需求排隊，但偏差校正後仍未落在容許範圍內，用剛更新的偏差值再補發一次。
-        this.requestReveal(sourceUri, inFlight.desiredLine, inFlight.attempts + 1);
+        this.requestReveal(sourceSide, inFlight.desiredLine, inFlight.attempts + 1);
       }
       return;
     }
 
-    const targetUri =
-      sourceUri === this.originalUri
-        ? this.translationUri
-        : sourceUri === this.translationUri
-          ? this.originalUri
-          : undefined;
-    if (!targetUri) {
-      return;
-    }
-
-    const targetEditor = vscode.window.visibleTextEditors.find(
-      (editor) => editor.document.uri.toString() === targetUri
-    );
+    const targetSide = otherCompareSide(sourceSide);
+    const targetEditor = this.compareView.editorFor(targetSide);
     if (!targetEditor) {
       return;
     }
 
     const desiredLine = Math.min(topLine, Math.max(targetEditor.document.lineCount - 1, 0));
 
-    if (this.inFlight.has(targetUri)) {
+    if (this.inFlight.has(targetSide)) {
       // 目標還在等待上一筆 revealRange 的回音，先排隊，等那筆回音處理完再套用最新值。
-      this.queued.set(targetUri, desiredLine);
+      this.queued.set(targetSide, desiredLine);
       return;
     }
 
-    this.requestReveal(targetUri, desiredLine, 0);
+    this.requestReveal(targetSide, desiredLine, 0);
   }
 
-  private requestReveal(uri: string, desiredLine: number, attempts: number): void {
-    const editor = vscode.window.visibleTextEditors.find((candidate) => candidate.document.uri.toString() === uri);
+  private requestReveal(side: CompareSide, desiredLine: number, attempts: number): void {
+    const editor = this.compareView.editorFor(side);
     if (!editor) {
       return;
     }
@@ -206,14 +205,14 @@ export class CompareScrollSync implements vscode.Disposable {
     const currentLine = editor.visibleRanges[0]?.start.line;
     if (currentLine !== undefined && Math.abs(currentLine - clampedDesired) <= LINE_TOLERANCE) {
       // 已經在容許誤差內了：不要再送出一次不會改變畫面的 revealRange，
-      // 那樣永遠收不到回音，會讓這個 uri 的 inFlight 狀態卡住，之後都無法再同步。
+      // 那樣永遠收不到回音，會讓這一側的 inFlight 狀態卡住，之後都無法再同步。
       return;
     }
 
-    const bias = this.bias.get(uri) ?? 0;
+    const bias = this.bias.get(side) ?? 0;
     const requestedLine = Math.min(Math.max(clampedDesired - bias, 0), maxLine);
 
-    this.inFlight.set(uri, { requestedLine, desiredLine: clampedDesired, attempts });
+    this.inFlight.set(side, { requestedLine, desiredLine: clampedDesired, attempts });
     editor.revealRange(new vscode.Range(requestedLine, 0, requestedLine, 0), vscode.TextEditorRevealType.AtTop);
   }
 }

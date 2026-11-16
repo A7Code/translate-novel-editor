@@ -49,13 +49,18 @@ src/
   constants.ts                  # TRANSLATION_LANGUAGE_ID 等共用常數
   services/
     projectStore.ts             # 讀寫 .novel-translate/project.json、建立成對原文/譯文純文字檔、詞彙表 CRUD
-    compareScrollSync.ts        # 比對框雙欄的捲動同步（依行號對齊，取代內建鎖定捲動）
+    compareView/
+      compareView.ts            # 比對功能核心：只管開兩個視窗（吃左右配置設定、原文設唯讀），對外廣播 onDidSetPair/onDidFocusEditor/onDidBlurEditor/onDidMoveIndex/onDidScroll/onDidChangeVisibility 事件，本身不做任何同步邏輯
+      extensions/
+        cursorSyncExtension.ts          # 游標行同步：訂閱 onDidMoveIndex/onDidSetPair/onDidChangeVisibility
+        scrollSyncExtension.ts          # 捲動同步：訂閱 onDidScroll/onDidSetPair，偏差學習＋狀態列開關
+        glossaryLanguageModeExtension.ts  # 開啟比對畫面時套用 novel-translation 語言模式：訂閱 onDidSetPair
     commentStore.ts             # 讀寫 .novel-translate/comments/<workId>/<chapterId>.json
     novelCommentController.ts   # 包裝 vscode.CommentController，管理翻譯筆記討論串的建立/還原/持久化
     epubService.ts              # EPUB 剖析/段落抽取/翻譯回填/重新打包的核心邏輯，不依賴 vscode API
   commands/
     workCommands.ts             # 建立作品、新增章節、匯入文字檔的指令邏輯
-    compareCommands.ts          # 開啟原文／譯文雙欄比對（原文唯讀＋行號同步捲動＋兩側都設定為 novel-translation 語言模式）
+    compareCommands.ts          # 指令層：解析使用者要開哪個章節，呼叫 CompareView.open() 開啟雙欄比對；比對本身（左右配置、唯讀、同步、語言模式）都交給 CompareView 與其擴充功能
     glossaryCommands.ts         # 新增/編輯/刪除詞條的指令邏輯
     languageModeCommands.ts     # 切換目前分頁語言模式（novel-translation ↔ plaintext）
     epubCommands.ts             # 匯入 EPUB 建立新作品、匯出 EPUB 作品回填譯文並重新打包
@@ -64,7 +69,7 @@ src/
   views/
     workTreeProvider.ts         # 「作品總管」View：讀取 ProjectStore 顯示作品 → 章節
     glossaryTreeProvider.ts     # 「詞彙表」View：讀取 ProjectStore 顯示作品 → 詞條
-    settingsTreeProvider.ts     # 「設置」View：同步捲動開關、詞彙表自動完成模式開關，兩個核取方塊項目
+    settingsTreeProvider.ts     # 「設置」View：捲動同步、游標同步、詞彙表自動完成、同音建議、翻譯顯示在左側，共五個核取方塊項目
 resources/
   icon.svg                      # Activity Bar 圖示
 ```
@@ -77,11 +82,21 @@ resources/
 - `commands`：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`refreshWorks`、`openCompareView`、`toggleScrollSync`、`refreshGlossary`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry`、`toggleAutocompleteMode`、`submitComment`、`toggleCommentResolved`、`deleteCommentThread`、`importEpub`、`exportEpub`
 - `menus`：作品項目的右鍵選單（新增章節／匯入文字檔，`when` 用 `viewItem =~ /^novelTranslateWork/` 同時吃一般作品與 EPUB 作品兩種 contextValue）、EPUB 作品項目額外的右鍵選單（匯出為 EPUB，`viewItem == novelTranslateWork-epub` 精確比對）、章節項目的右鍵選單（開啟比對，與單擊章節項目相同效果）、詞彙表作品項目的右鍵選單（新增詞條）、詞條項目的右鍵選單（編輯／刪除）、作品總管 View 標題列的匯入 EPUB 按鈕、兩個 View 標題列各自的重新整理按鈕、`comments/commentThread/context`（送出留言的 inline 按鈕）、`comments/commentThread/title`（切換已解決／刪除討論串）
 - `languages` / `configurationDefaults`：自訂語言模式 `novel-translation`，並關閉其 `editor.wordBasedSuggestions`，讓詞彙表自動完成跟一般聯想雜訊分流
-- `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器；`novelTranslate.glossaryAutocomplete.enabled`（boolean，預設 `true`）——開啟比對畫面時是否自動把原文／譯文都設為 `novel-translation` 語言模式（詞彙表自動完成）
+- `configuration`：`novelTranslate.compareScrollSync.enabled`（boolean，預設 `true`）——是否同步捲動比對畫面兩側編輯器；`novelTranslate.compareCursorSync.enabled`（boolean，預設 `true`）——是否把焦點編輯器的游標行同步到另一側；`novelTranslate.compareView.translationOnLeft`（boolean，預設 `true`）——比對畫面翻譯稿是否顯示在左側；`novelTranslate.glossaryAutocomplete.enabled`（boolean，預設 `true`）——開啟比對畫面時是否自動把原文／譯文都設為 `novel-translation` 語言模式（詞彙表自動完成）
 
-作品管理（Phase 1）、比對框（Phase 2）、詞彙表管理與自動完成（Phase 3）、翻譯筆記（Phase 4）、EPUB 匯入／匯出（Phase 5）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`——詞彙表就存在每個 `WorkConfig.glossary` 裡，沒有另開 `glossary.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView` 依賴內建指令 `workbench.action.files.setActiveEditorReadonlyInSession`（把原文設為本次 session 唯讀），並在 `novelTranslate.glossaryAutocomplete.enabled` 設定開啟時，把原文與譯文檔案都用 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（該設定關閉時則維持文件原本的語言模式，不套用詞彙表自動完成）；捲動同步則是 `CompareScrollSync`（`src/services/compareScrollSync.ts`）自行監聽 `onDidChangeTextEditorVisibleRanges` 並用 `revealRange` 對齊行號，**不再使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。
+作品管理（Phase 1）、比對框（Phase 2）、詞彙表管理與自動完成（Phase 3）、翻譯筆記（Phase 4）、EPUB 匯入／匯出（Phase 5）皆已實作完成：`novelTranslate.createWork`、`addChapter`、`importChapterFile`、`openCompareView`、`addGlossaryEntry`、`editGlossaryEntry`、`deleteGlossaryEntry` 都是真正的邏輯，資料持久化在工作區的 `.novel-translate/project.json`——詞彙表就存在每個 `WorkConfig.glossary` 裡，沒有另開 `glossary.json`。章節項目的 `TreeItem.command` 直接綁定 `openCompareView`（見 `workTreeProvider.ts` 的 `ChapterTreeItem`），所以單擊章節就會進入比對模式；`addChapter`／`importChapterFile` 完成後也會呼叫同一個函式自動開比對框。`openCompareView`（`src/commands/compareCommands.ts`）只做「使用者互動」這一層：沒給章節時跳 QuickPick 讓使用者選作品／章節，取出 `originalPath`/`translationPath` 對應的 `Uri`，呼叫 `CompareView.open(originalUri, translationUri)`。
 
-`CompareScrollSync` 內部用「每個 uri 同時最多一筆待回應的 `revealRange` 請求＋排隊＋落點偏差學習」來處理 `revealRange(AtTop)` 實際落點與要求行數不保證精確對齊、連續捲動時請求互相干擾的問題；是否啟用由設定 `novelTranslate.compareScrollSync.enabled` 控制，可透過 `novelTranslate.toggleScrollSync` 指令、比對視窗可見時顯示的狀態列項目、或 `SettingsTreeProvider`（`src/views/settingsTreeProvider.ts`，掛在「設置」View、用 `TreeItem.checkboxState` + `TreeView.onDidChangeCheckboxState` 實作核取方塊）三種 UI 入口切換，彼此透過 `onDidChangeConfiguration` 保持同步。
+真正「開比對畫面」的邏輯都在 `CompareView`（`src/services/compareView/compareView.ts`）：依 `novelTranslate.compareView.translationOnLeft` 決定左右欄分別開哪個檔案，依內建指令 `workbench.action.files.setActiveEditorReadonlyInSession` 把原文設為本次 session 唯讀，開完後記住這對 `Uri`。**`CompareView` 本身完全不認識游標同步、捲動同步、詞彙表語言模式這些概念**——它只單純監聽 VSCode 原生的 `onDidChangeActiveTextEditor`／`onDidChangeTextEditorSelection`／`onDidChangeTextEditorVisibleRanges`／`onDidChangeVisibleTextEditors`，過濾出屬於目前配對的那兩個檔案，轉成語意化的事件廣播出去：`onDidSetPair`（開了新的一對原文／譯文）、`onDidFocusEditor`／`onDidBlurEditor`（配對中某一側變成／不再是焦點編輯器）、`onDidMoveIndex`（配對中某一側的游標移動了）、`onDidScroll`（配對中某一側的可視範圍變了）、`onDidChangeVisibility`（配對中兩側目前各自是否顯示在畫面上）。
+
+所有「比對時順便做點什麼」的功能都是**擴充功能**，活在 `src/services/compareView/extensions/` 底下各自獨立的檔案：建構時讀自己的設定鍵，並監聽 `onDidChangeConfiguration` 動態訂閱／取消訂閱 `CompareView` 的事件——**設定關閉時要完全不向 `CompareView` 註冊任何監聽**，不是訂閱了再在 handler 裡用 `if (!enabled) return` 短路。目前有三個：
+
+- `cursorSyncExtension.ts`（`novelTranslate.compareCursorSync.enabled`）：訂閱 `onDidMoveIndex` 把游標行同步到另一側；`onDidSetPair`／`onDidChangeVisibility` 觸發時額外用目前 `activeTextEditor` 校正一次，不用等使用者先移動游標才會同步
+- `scrollSyncExtension.ts`（`novelTranslate.compareScrollSync.enabled`）：訂閱 `onDidScroll`，用「每一側同時最多一筆待回應的 `revealRange` 請求＋排隊＋落點偏差學習」處理 `revealRange(AtTop)` 實際落點與要求行數不保證精確對齊、連續捲動時請求互相干擾的問題；**不使用** VSCode 內建的 `workbench.action.toggleLockedScrolling`（那個指令是用絕對像素差值同步，兩個檔案長度不同或編輯中捲動時容易把另一邊頂到檔案底部）。狀態列的「同步捲動：開／關」按鈕是例外：為了讓使用者在同步關閉時仍看得到、能點擊重新開啟，它的可見度追蹤（跟著 `onDidChangeVisibility`）**不受**這個擴充功能啟用與否影響，一律在建構時就訂閱
+- `glossaryLanguageModeExtension.ts`（`novelTranslate.glossaryAutocomplete.enabled`）：訂閱 `onDidSetPair`，把原文／譯文兩份文件用 `vscode.languages.setTextDocumentLanguage` 設為 `novel-translation` 語言模式（詞彙表自動完成）；關閉時維持文件原本的語言模式
+
+是否啟用各自由對應設定控制，可透過命令面板指令（如 `novelTranslate.toggleScrollSync`）、比對視窗可見時顯示的狀態列項目、或 `SettingsTreeProvider`（`src/views/settingsTreeProvider.ts`，掛在「設置」View、用 `TreeItem.checkboxState` + `TreeView.onDidChangeCheckboxState` 實作核取方塊）等 UI 入口切換，彼此透過 `onDidChangeConfiguration` 保持同步。
+
+**日後要幫比對畫面加新的「順便做點什麼」功能**（例如：比較兩側段落數量、在狀態列顯示字數差異……），請新增一個獨立檔案到 `extensions/` 底下，依上面的模式實作，不要把邏輯寫進 `compareView.ts`。只有當新需求真的是「開視窗本身的行為」（例如要改左右欄位的判斷方式），或者**現有事件都無法表達**你需要的語意（例如需要一個全新的「段落邊界」事件）時才動 `compareView.ts`——而且即使那樣，也只新增一個新的事件或方法，不要讓 core 認識任何設定鍵、或在 core 裡面寫任何條件式的同步邏輯，那些永遠是擴充功能的職責。
 
 `GlossaryCompletionProvider`（`src/providers/glossaryCompletionProvider.ts`）註冊在 `{ language: TRANSLATION_LANGUAGE_ID }`：拿到文件後先用 `ProjectStore.findWorkIdForDocumentUri` 反查所屬作品，再把該作品的 `glossary` 整批轉成 `CompletionItem`（每個詞條各給原文、譯名兩個候選項，`filterText` 同時含兩者）。`novelTranslate.toggleAutocompleteMode`（`src/commands/languageModeCommands.ts`）則是在目前分頁的語言模式 `novel-translation` 與 `plaintext` 間切換，供需要臨時關閉詞彙表建議時使用。
 

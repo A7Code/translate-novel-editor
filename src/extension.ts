@@ -4,8 +4,10 @@ import { GlossaryEntryTreeItem, GlossaryTreeProvider, GlossaryWorkTreeItem } fro
 import { GlossaryManagerPanel } from "./panels/glossaryManagerPanel";
 import { SettingsTreeProvider } from "./views/settingsTreeProvider";
 import { ProjectStore } from "./services/projectStore";
-import { CompareScrollSync } from "./services/compareScrollSync";
-import { CompareCursorSync } from "./services/compareCursorSync";
+import { CompareView } from "./services/compareView/compareView";
+import { CursorSyncExtension } from "./services/compareView/extensions/cursorSyncExtension";
+import { ScrollSyncExtension } from "./services/compareView/extensions/scrollSyncExtension";
+import { GlossaryLanguageModeExtension } from "./services/compareView/extensions/glossaryLanguageModeExtension";
 import { addChapter, createWork, importChapterFile } from "./commands/workCommands";
 import { openCompareView, syncGlossaryAutocompleteLanguageMode, toggleCompareLayout } from "./commands/compareCommands";
 import { addGlossaryEntry, deleteGlossaryEntry, editGlossaryEntry } from "./commands/glossaryCommands";
@@ -22,8 +24,10 @@ export function activate(context: vscode.ExtensionContext) {
   const workTreeProvider = new WorkTreeProvider(projectStore);
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore);
   const settingsTreeProvider = new SettingsTreeProvider();
-  const compareScrollSync = new CompareScrollSync();
-  const compareCursorSync = new CompareCursorSync();
+  const compareView = new CompareView();
+  const cursorSyncExtension = new CursorSyncExtension(compareView);
+  const scrollSyncExtension = new ScrollSyncExtension(compareView);
+  const glossaryLanguageModeExtension = new GlossaryLanguageModeExtension(compareView);
   const commentController = new NovelCommentController(projectStore);
 
   const settingsTreeView = vscode.window.createTreeView("novelTranslate.settings", {
@@ -31,8 +35,10 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(
-    compareScrollSync,
-    compareCursorSync,
+    compareView,
+    cursorSyncExtension,
+    scrollSyncExtension,
+    glossaryLanguageModeExtension,
     commentController,
     settingsTreeProvider,
     settingsTreeView,
@@ -54,20 +60,20 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("novelTranslate.createWork", () => createWork(projectStore, workTreeProvider)),
 
     vscode.commands.registerCommand("novelTranslate.addChapter", (item?: WorkTreeItem) =>
-      addChapter(projectStore, workTreeProvider, compareScrollSync, compareCursorSync, item)
+      addChapter(projectStore, workTreeProvider, compareView, item)
     ),
 
     vscode.commands.registerCommand("novelTranslate.importChapterFile", (item?: WorkTreeItem) =>
-      importChapterFile(projectStore, workTreeProvider, compareScrollSync, compareCursorSync, item)
+      importChapterFile(projectStore, workTreeProvider, compareView, item)
     ),
 
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
 
     vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
-      openCompareView(projectStore, compareScrollSync, compareCursorSync, item?.chapter)
+      openCompareView(projectStore, compareView, item?.chapter)
     ),
 
-    vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => compareScrollSync.toggle()),
+    vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => scrollSyncExtension.toggle()),
 
     vscode.commands.registerCommand("novelTranslate.toggleCompareLayout", () => toggleCompareLayout()),
 

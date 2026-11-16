@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { ProjectStore } from "../services/projectStore";
-import { CompareScrollSync } from "../services/compareScrollSync";
-import { CompareCursorSync } from "../services/compareCursorSync";
+import { CompareView } from "../services/compareView/compareView";
 import { ChapterConfig } from "../types";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
@@ -11,8 +10,7 @@ import {
 
 export async function openCompareView(
   store: ProjectStore | undefined,
-  scrollSync: CompareScrollSync,
-  cursorSync: CompareCursorSync,
+  compareView: CompareView,
   chapter?: ChapterConfig
 ): Promise<void> {
   if (!store) {
@@ -27,33 +25,8 @@ export async function openCompareView(
 
   const originalUri = store.resolveUri(resolvedChapter.originalPath);
   const translationUri = store.resolveUri(resolvedChapter.translationPath);
-  const config = vscode.workspace.getConfiguration();
-  const glossaryAutocompleteEnabled = config.get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true);
-  const translationOnLeft = config.get<boolean>(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY, true);
-  const originalColumn = translationOnLeft ? vscode.ViewColumn.Two : vscode.ViewColumn.One;
-  const translationColumn = translationOnLeft ? vscode.ViewColumn.One : vscode.ViewColumn.Two;
 
-  let originalDocument = await vscode.workspace.openTextDocument(originalUri);
-  if (glossaryAutocompleteEnabled && originalDocument.languageId !== TRANSLATION_LANGUAGE_ID) {
-    originalDocument = await vscode.languages.setTextDocumentLanguage(originalDocument, TRANSLATION_LANGUAGE_ID);
-  }
-  await vscode.window.showTextDocument(originalDocument, {
-    viewColumn: originalColumn,
-    preview: false
-  });
-  await vscode.commands.executeCommand("workbench.action.files.setActiveEditorReadonlyInSession");
-
-  let translationDocument = await vscode.workspace.openTextDocument(translationUri);
-  if (glossaryAutocompleteEnabled && translationDocument.languageId !== TRANSLATION_LANGUAGE_ID) {
-    translationDocument = await vscode.languages.setTextDocumentLanguage(translationDocument, TRANSLATION_LANGUAGE_ID);
-  }
-  await vscode.window.showTextDocument(translationDocument, {
-    viewColumn: translationColumn,
-    preview: false
-  });
-
-  scrollSync.setPair(originalUri, translationUri);
-  cursorSync.setPair(originalUri, translationUri);
+  await compareView.open(originalUri, translationUri);
 }
 
 // 讓使用者透過命令面板（Ctrl+Shift+P）或設置面板的核取方塊切換比對畫面的左右配置，
