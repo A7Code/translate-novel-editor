@@ -11,6 +11,11 @@ export const CURSOR_SYNC_ENABLED_SETTING_KEY = "novelTranslate.compareCursorSync
 export class CursorSyncExtension implements vscode.Disposable {
   private readonly configSubscription: vscode.Disposable;
   private registrations: vscode.Disposable[] = [];
+  // 記錄我們自己剛對哪一側下達過同步指令、同步到第幾行。VS Code 觸發 selection 變動事件是非同步的，
+  // 單純比較「目標現在是不是已經在那一行」並不夠可靠（例如目標當下仍殘留非空選取範圍時一定會被
+  // 判定要覆寫），所以改成明確標記「這筆即將發生的事件是我們自己造成的」，收到時直接吃掉、
+  // 不再往回同步，才能從根本阻斷兩側互相觸發的迴圈，不依賴猜測目標目前的選取狀態。
+  private readonly pendingSyncLine = new Map<CompareSide, number>();
 
   constructor(private readonly compareView: CompareView) {
     this.configSubscription = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -54,6 +59,7 @@ export class CursorSyncExtension implements vscode.Disposable {
       registration.dispose();
     }
     this.registrations = [];
+    this.pendingSyncLine.clear();
   }
 
   private syncFromActiveEditor(): void {
@@ -69,10 +75,20 @@ export class CursorSyncExtension implements vscode.Disposable {
   }
 
   // 兩側誰移動游標就同步到另一側（跟 scrollSyncExtension 一致的對稱式設計）。
-  // 我們自己改動目標編輯器 selection 所觸發的事件，因為目標行號早已一致，
-  // 會被下面的比較擋下，不會形成回饋迴圈。
   private syncTarget(sourceSide: CompareSide, line: number): void {
-    const targetEditor = this.compareView.editorFor(otherCompareSide(sourceSide));
+    // 如果這筆事件剛好是我們自己對 sourceSide 下達同步指令所造成的回音，直接吃掉，
+    // 不要再往回同步到另一側——這是避免兩側互相觸發無窮迴圈的關鍵，不能只靠猜測
+    // 目標當下的選取狀態是否「看起來」已經一致。
+    const pendingLine = this.pendingSyncLine.get(sourceSide);
+    if (pendingLine !== undefined) {
+      this.pendingSyncLine.delete(sourceSide);
+      if (pendingLine === line) {
+        return;
+      }
+    }
+
+    const targetSide = otherCompareSide(sourceSide);
+    const targetEditor = this.compareView.editorFor(targetSide);
     if (!targetEditor) {
       return;
     }
@@ -83,6 +99,7 @@ export class CursorSyncExtension implements vscode.Disposable {
     }
 
     const position = new vscode.Position(clampedLine, 0);
+    this.pendingSyncLine.set(targetSide, clampedLine);
     targetEditor.selection = new vscode.Selection(position, position);
   }
 }
