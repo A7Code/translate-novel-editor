@@ -128,14 +128,17 @@ class PunctuationSuggestSettingItem extends vscode.TreeItem {
   }
 }
 
-// 不是核取方塊，單純一個可點擊的項目：點下去會呼叫 novelTranslate.configurePunctuationSuggestKeybinding，
-// 直接打開 VS Code 原生的「鍵盤快速鍵」設定頁面，並篩選到這個指令，讓使用者用內建 UI
-// 自訂／移除快捷鍵（沖突偵測、改 when 條件等都是原生功能，不需要自己刻一套）。
+// 不是核取方塊，單純一個可點擊的項目：點下去（或點右側的鍵盤圖示按鈕）都會呼叫
+// novelTranslate.configurePunctuationSuggestKeybinding，直接打開 VS Code 原生的
+// 「鍵盤快速鍵」設定頁面，並篩選到這個指令，讓使用者用內建 UI 自訂／移除快捷鍵
+// （沖突偵測、改 when 條件等都是原生功能，不需要自己刻一套）。
+// contextValue 對應 package.json 的 view/item/context 選單，用來在項目右側顯示
+// inline 的鍵盤圖示按鈕。
 class ConfigurePunctuationKeybindingSettingItem extends vscode.TreeItem {
   constructor() {
     super("設定快捷鍵…", vscode.TreeItemCollapsibleState.None);
     this.id = PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID;
-    this.iconPath = new vscode.ThemeIcon("keyboard");
+    this.contextValue = "settingsPunctuationKeybinding";
     this.tooltip = "開啟 VS Code 的鍵盤快速鍵設定頁面並篩選到這個指令，可以在那裡自訂或移除快捷鍵（預設 Ctrl+Alt+P／Cmd+Alt+P）。";
     this.command = {
       command: "novelTranslate.configurePunctuationSuggestKeybinding",

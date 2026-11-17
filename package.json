@@ -153,7 +153,8 @@
       {
         "command": "novelTranslate.configurePunctuationSuggestKeybinding",
         "title": "小說翻譯：設定「推薦原文標點符號」的快捷鍵",
-        "category": "小說翻譯"
+        "category": "小說翻譯",
+        "icon": "$(keyboard)"
       },
       {
         "command": "novelTranslate.submitComment",
@@ -264,6 +265,11 @@
         {
           "command": "novelTranslate.deleteGlossaryEntry",
           "when": "view == novelTranslate.glossary && viewItem == novelTranslateGlossaryEntry"
+        },
+        {
+          "command": "novelTranslate.configurePunctuationSuggestKeybinding",
+          "when": "view == novelTranslate.settings && viewItem == settingsPunctuationKeybinding",
+          "group": "inline"
         }
       ],
       "comments/commentThread/context": [
