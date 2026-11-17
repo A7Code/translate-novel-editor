@@ -25,7 +25,10 @@ import {
 import { syncGlossaryAutocompleteLanguageMode, toggleAutocompleteMode } from "./glossary/languageModeCommands";
 import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvider";
 import { PunctuationSuggestCompletionProvider } from "./compareView/extensions/punctuationSuggestProvider";
-import { suggestPunctuationFromOriginal } from "./compareView/punctuationSuggestCommands";
+import {
+  configurePunctuationSuggestKeybinding,
+  suggestPunctuationFromOriginal
+} from "./compareView/punctuationSuggestCommands";
 import { NovelCommentController } from "./comments/novelCommentController";
 import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
@@ -205,6 +208,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.suggestPunctuationFromOriginal", () =>
       safeRun(suggestPunctuationFromOriginal(compareView), "推薦原文標點符號")
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.configurePunctuationSuggestKeybinding", () =>
+      safeRun(configurePunctuationSuggestKeybinding(), "開啟標點符號推薦快捷鍵設定")
     ),
 
     vscode.commands.registerCommand("novelTranslate.submitComment", (reply: vscode.CommentReply) =>

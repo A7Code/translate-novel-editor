@@ -151,6 +151,11 @@
         "category": "小說翻譯"
       },
       {
+        "command": "novelTranslate.configurePunctuationSuggestKeybinding",
+        "title": "小說翻譯：設定「推薦原文標點符號」的快捷鍵",
+        "category": "小說翻譯"
+      },
+      {
         "command": "novelTranslate.submitComment",
         "title": "送出",
         "category": "小說翻譯",

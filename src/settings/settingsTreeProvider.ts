@@ -22,6 +22,7 @@ const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
 const PUNCTUATION_SUGGEST_ITEM_ID = "punctuationSuggest.enabled";
+const PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID = "punctuationSuggest.configureKeybinding";
 
 // 讓使用者點擊整個設定項目（不只是核取方塊本身）時也能切換開關。
 export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleCheckbox";
@@ -40,7 +41,7 @@ const PUNCTUATION_SUGGEST_GROUP_ID = "group.punctuationSuggest";
 const GROUP_ITEM_IDS: Record<string, string[]> = {
   [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
   [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
-  [PUNCTUATION_SUGGEST_GROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID]
+  [PUNCTUATION_SUGGEST_GROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID]
 };
 const GROUP_LABELS: Record<string, string> = {
   [COMPARE_VIEW_GROUP_ID]: "比對畫面設定",
@@ -124,6 +125,22 @@ class PunctuationSuggestSettingItem extends vscode.TreeItem {
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
     this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
+  }
+}
+
+// 不是核取方塊，單純一個可點擊的項目：點下去會呼叫 novelTranslate.configurePunctuationSuggestKeybinding，
+// 直接打開 VS Code 原生的「鍵盤快速鍵」設定頁面，並篩選到這個指令，讓使用者用內建 UI
+// 自訂／移除快捷鍵（沖突偵測、改 when 條件等都是原生功能，不需要自己刻一套）。
+class ConfigurePunctuationKeybindingSettingItem extends vscode.TreeItem {
+  constructor() {
+    super("設定快捷鍵…", vscode.TreeItemCollapsibleState.None);
+    this.id = PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID;
+    this.iconPath = new vscode.ThemeIcon("keyboard");
+    this.tooltip = "開啟 VS Code 的鍵盤快速鍵設定頁面並篩選到這個指令，可以在那裡自訂或移除快捷鍵（預設 Ctrl+Alt+P／Cmd+Alt+P）。";
+    this.command = {
+      command: "novelTranslate.configurePunctuationSuggestKeybinding",
+      title: "設定快捷鍵"
+    };
   }
 }
 
@@ -363,6 +380,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         );
       case PUNCTUATION_SUGGEST_ITEM_ID:
         return new PunctuationSuggestSettingItem(config.get<boolean>(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY, true));
+      case PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID:
+        return new ConfigurePunctuationKeybindingSettingItem();
       default:
         return undefined;
     }
