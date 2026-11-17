@@ -30,25 +30,47 @@ export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleChe
 // 群組節點的 id，同時也是記住展開狀態用的 key。
 const COMPARE_VIEW_GROUP_ID = "group.compareView";
 const GLOSSARY_GROUP_ID = "group.glossary";
-// 「是否使用詞語」分類開關群組：依作品列出各自的詞彙分類，開關狀態存在該作品的
-// project.json 裡（ProjectStore.setGlossaryCategoryEnabled），所以每個作品可以各自獨立設定，
+// 「詞語分類選擇」：依作品列出各自的詞彙分類，開關狀態存在該作品的 project.json 裡
+// （ProjectStore.setGlossaryCategoryEnabled），所以每個作品可以各自獨立設定，
 // 且會隨 project.json 持久化、下次開啟工作區時自動套用。
 const GLOSSARY_CATEGORY_GROUP_ID = "group.glossaryCategories";
 const GLOSSARY_CATEGORY_WORK_PREFIX = "glossaryCategoryGroup/";
-const PUNCTUATION_SUGGEST_GROUP_ID = "group.punctuationSuggest";
+// 「自動補完設定」底下的子群組：標點符號推薦（開關＋快捷鍵）跟詞語分類選擇都收在這裡。
+const AUTOCOMPLETE_SETTINGS_GROUP_ID = "group.autocompleteSettings";
+const PUNCTUATION_SUBGROUP_ID = "group.autocompleteSettings.punctuation";
+
+// 最上層（根節點）會列出的群組。
+const ROOT_GROUP_IDS = [COMPARE_VIEW_GROUP_ID, GLOSSARY_GROUP_ID, AUTOCOMPLETE_SETTINGS_GROUP_ID];
+
+// 群組底下是「其他群組」而不是設定項目時用這張表（跟 GROUP_ITEM_IDS 分開維護，
+// 因為兩者 getChildren() 時建立子節點的方式不同：一個是群組節點、一個是設定項目）。
+const SUBGROUP_CHILDREN: Record<string, string[]> = {
+  [AUTOCOMPLETE_SETTINGS_GROUP_ID]: [PUNCTUATION_SUBGROUP_ID, GLOSSARY_CATEGORY_GROUP_ID]
+};
 
 // 各群組底下有哪些設定項目 id，用於 getParent() 往上找父節點。
 const GROUP_ITEM_IDS: Record<string, string[]> = {
   [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
   [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
-  [PUNCTUATION_SUGGEST_GROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID]
+  [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID]
 };
 const GROUP_LABELS: Record<string, string> = {
   [COMPARE_VIEW_GROUP_ID]: "比對畫面設定",
   [GLOSSARY_GROUP_ID]: "詞彙表設定",
-  [GLOSSARY_CATEGORY_GROUP_ID]: "是否使用詞語（分類）",
-  [PUNCTUATION_SUGGEST_GROUP_ID]: "標點符號推薦設定"
+  [GLOSSARY_CATEGORY_GROUP_ID]: "詞語分類選擇",
+  [AUTOCOMPLETE_SETTINGS_GROUP_ID]: "自動補完設定",
+  [PUNCTUATION_SUBGROUP_ID]: "標點符號"
 };
+
+// id 是否為任何一種群組節點（根群組、設定項目的父群組、或子群組群組），
+// findItemById()／setGroupExpanded() 共用這個判斷。
+function isGroupId(id: string): boolean {
+  return (
+    ROOT_GROUP_IDS.includes(id) ||
+    id in GROUP_ITEM_IDS ||
+    Object.values(SUBGROUP_CHILDREN).some((childIds) => childIds.includes(id))
+  );
+}
 
 function glossaryCategoryWorkGroupId(workId: string): string {
   return `${GLOSSARY_CATEGORY_WORK_PREFIX}${workId}`;
@@ -159,7 +181,7 @@ class TranslationOnLeftSettingItem extends vscode.TreeItem {
   }
 }
 
-// 「是否使用詞語」群組底下，每個有詞彙的作品各自一個子群組，展開後才是該作品的分類開關。
+// 「詞語分類選擇」群組底下，每個有詞彙的作品各自一個子群組，展開後才是該作品的分類開關。
 // 節點本身也是個核取方塊：這是「作品（大類型）」總開關，關閉後不論底下分類開關如何都
 // 不查詢，跟下一層的分類（小類型）開關分屬不同層級、互不取代，由 GlossaryCompletionProvider
 // 先判斷這個再判斷分類。
@@ -247,12 +269,10 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if (!element) {
-      return [
-        this.createGroupItem(COMPARE_VIEW_GROUP_ID),
-        this.createGroupItem(GLOSSARY_GROUP_ID),
-        this.createGroupItem(GLOSSARY_CATEGORY_GROUP_ID),
-        this.createGroupItem(PUNCTUATION_SUGGEST_GROUP_ID)
-      ];
+      return ROOT_GROUP_IDS.map((groupId) => this.createGroupItem(groupId));
+    }
+    if (element.id && element.id in SUBGROUP_CHILDREN) {
+      return SUBGROUP_CHILDREN[element.id].map((groupId) => this.createGroupItem(groupId));
     }
     if (element.id === GLOSSARY_CATEGORY_GROUP_ID) {
       return this.createGlossaryCategoryWorkGroups();
@@ -279,6 +299,11 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
     if (element instanceof GlossaryCategoryWorkGroupItem) {
       return this.createGroupItem(GLOSSARY_CATEGORY_GROUP_ID);
     }
+    for (const [parentGroupId, childGroupIds] of Object.entries(SUBGROUP_CHILDREN)) {
+      if (childGroupIds.includes(element.id)) {
+        return this.createGroupItem(parentGroupId);
+      }
+    }
     for (const groupId of Object.keys(GROUP_ITEM_IDS)) {
       if (GROUP_ITEM_IDS[groupId].includes(element.id)) {
         return this.createGroupItem(groupId);
@@ -289,7 +314,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 
   // 依照初始化時還原選取用的 id，找回對應的節點實例（可能是群組、設定項目，或作品的分類開關）。
   async findItemById(id: string): Promise<vscode.TreeItem | undefined> {
-    if (id in GROUP_ITEM_IDS || id === GLOSSARY_CATEGORY_GROUP_ID) {
+    if (isGroupId(id)) {
       return this.createGroupItem(id);
     }
     if (id.startsWith(GLOSSARY_CATEGORY_WORK_PREFIX)) {
@@ -322,9 +347,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
   // 使用者展開或收合群組時呼叫，把狀態寫回 globalState，下次開啟畫面時套用。
   setGroupExpanded(groupId: string, expanded: boolean): void {
     const isKnownGroup =
-      groupId in GROUP_ITEM_IDS ||
-      groupId === GLOSSARY_CATEGORY_GROUP_ID ||
-      (groupId.startsWith(GLOSSARY_CATEGORY_WORK_PREFIX) && !groupId.includes("/category/"));
+      isGroupId(groupId) || (groupId.startsWith(GLOSSARY_CATEGORY_WORK_PREFIX) && !groupId.includes("/category/"));
     if (!isKnownGroup) {
       return;
     }
