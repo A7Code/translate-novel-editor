@@ -59,6 +59,7 @@ src/
   comments/             # 翻譯筆記、註解儲存與合併
   epub/                 # EPUB 解析、抽取、回填、匯入匯出與章節升級
   settings/             # 「設置」View
+  translation/          # 翻譯進度的純計算、進度服務與狀態列
   test/                 # 不依賴 vscode 的純邏輯測試
 scripts/
   run-unit-tests.js     # 打包並執行純邏輯測試
