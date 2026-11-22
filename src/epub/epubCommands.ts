@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { getDefaultLanguages } from "../core/defaultLanguages";
 import { ProjectStore } from "../core/projectStore";
 import { WorkTreeItem, WorkTreeProvider } from "../work/workTreeProvider";
 import { applyTranslationToChapterHtml, buildEpubZip, extractParagraphTexts, parseEpub } from "./epubService";
@@ -46,13 +47,16 @@ export async function importEpub(store: ProjectStore | undefined, treeProvider: 
   }
 
   const author = await vscode.window.showInputBox({ prompt: "作者（可留空）", value: parsed.author });
+  const defaultLanguages = getDefaultLanguages();
+  // EPUB 自身標示的語言比通用預設值更貼近這本書，所以優先採用。
   const sourceLanguage = await vscode.window.showInputBox({
     prompt: "原文語言代碼（可留空，例如 en、ja）",
-    value: parsed.language
+    value: parsed.language || defaultLanguages.source
   });
   const targetLanguage = await vscode.window.showInputBox({
     prompt: "譯文語言代碼（可留空，例如 zh-TW）",
-    placeHolder: "zh-TW"
+    placeHolder: "zh-TW",
+    value: defaultLanguages.target
   });
 
   const work = await store.addWork({

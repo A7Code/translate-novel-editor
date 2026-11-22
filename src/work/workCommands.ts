@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { getDefaultLanguages } from "../core/defaultLanguages";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
 import { CompareView } from "../compareView/compareView";
@@ -29,13 +30,16 @@ export async function createWork(
   }
 
   const author = await vscode.window.showInputBox({ prompt: "作者（可留空）" });
+  const defaultLanguages = getDefaultLanguages();
   const sourceLanguage = await vscode.window.showInputBox({
     prompt: "原文語言代碼（可留空，例如 en、ja）",
-    placeHolder: "en"
+    placeHolder: "en",
+    value: defaultLanguages.source
   });
   const targetLanguage = await vscode.window.showInputBox({
     prompt: "譯文語言代碼（可留空，例如 zh-TW）",
-    placeHolder: "zh-TW"
+    placeHolder: "zh-TW",
+    value: defaultLanguages.target
   });
 
   const work = await store.addWork({
