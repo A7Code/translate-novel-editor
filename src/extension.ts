@@ -14,7 +14,7 @@ import { CompareView } from "./compareView/compareView";
 import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
 import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtension";
 import { GlossaryLanguageModeExtension } from "./glossary/integrations/compareViewLanguageMode";
-import { addChapter, createWork, editWork, importChapterFile, renameChapter } from "./work/workCommands";
+import { addChapter, createWork, editWork, importChapterFile, moveTreeItem, renameChapter } from "./work/workCommands";
 import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./compareView/compareCommands";
 import {
   addGlossaryCategory,
@@ -161,6 +161,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.renameChapter", (item: ChapterTreeItem) =>
       renameChapter(projectStore, workTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.moveItemUp", (item: WorkTreeItem | ChapterTreeItem) =>
+      moveTreeItem(projectStore, workTreeProvider, glossaryTreeProvider, item, -1)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.moveItemDown", (item: WorkTreeItem | ChapterTreeItem) =>
+      moveTreeItem(projectStore, workTreeProvider, glossaryTreeProvider, item, 1)
     ),
 
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),

@@ -93,6 +93,18 @@
         "icon": "$(edit)"
       },
       {
+        "command": "novelTranslate.moveItemUp",
+        "title": "上移",
+        "category": "小說翻譯",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "novelTranslate.moveItemDown",
+        "title": "下移",
+        "category": "小說翻譯",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "novelTranslate.importChapterFile",
         "title": "小說翻譯：匯入文字檔為章節",
         "category": "小說翻譯"
@@ -241,6 +253,14 @@
         {
           "command": "novelTranslate.renameChapter",
           "when": "false"
+        },
+        {
+          "command": "novelTranslate.moveItemUp",
+          "when": "false"
+        },
+        {
+          "command": "novelTranslate.moveItemDown",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -258,6 +278,16 @@
           "command": "novelTranslate.renameChapter",
           "when": "view == novelTranslate.works && viewItem == novelTranslateChapter",
           "group": "1_modification"
+        },
+        {
+          "command": "novelTranslate.moveItemUp",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslate(Work|Chapter)/",
+          "group": "2_order@1"
+        },
+        {
+          "command": "novelTranslate.moveItemDown",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslate(Work|Chapter)/",
+          "group": "2_order@2"
         },
         {
           "command": "novelTranslate.importChapterFile",

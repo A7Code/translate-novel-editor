@@ -6,6 +6,15 @@ import { getInitialPinyin } from "./pinyinUtil";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
 
+function swapWithNeighbor<T>(items: T[], index: number, delta: -1 | 1): boolean {
+  const target = index + delta;
+  if (target < 0 || target >= items.length) {
+    return false;
+  }
+  [items[index], items[target]] = [items[target], items[index]];
+  return true;
+}
+
 export class ProjectStore {
   private cache: ProjectConfig | undefined;
 
@@ -106,6 +115,28 @@ export class ProjectStore {
     chapter.title = title;
     await this.save(config);
     return chapter;
+  }
+
+  async moveWork(workId: string, delta: -1 | 1): Promise<boolean> {
+    const config = await this.load();
+    const index = config.works.findIndex((candidate) => candidate.id === workId);
+    if (index < 0 || !swapWithNeighbor(config.works, index, delta)) {
+      return false;
+    }
+    await this.save(config);
+    return true;
+  }
+
+  // 只調整陣列順序，章節 id 不重新編號，檔案路徑與註解的對應才不會錯位。
+  async moveChapter(workId: string, chapterId: string, delta: -1 | 1): Promise<boolean> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const index = work.chapters.findIndex((candidate) => candidate.id === chapterId);
+    if (index < 0 || !swapWithNeighbor(work.chapters, index, delta)) {
+      return false;
+    }
+    await this.save(config);
+    return true;
   }
 
   async addGlossaryEntry(

@@ -157,6 +157,32 @@ export async function renameChapter(
   treeProvider.refresh();
 }
 
+export async function moveTreeItem(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  glossaryTreeProvider: GlossaryTreeProvider,
+  item: WorkTreeItem | ChapterTreeItem,
+  delta: -1 | 1
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  if (item instanceof ChapterTreeItem) {
+    if (await store.moveChapter(item.workId, item.chapter.id, delta)) {
+      treeProvider.refresh();
+    }
+    return;
+  }
+
+  // 詞彙表側邊欄也依作品順序顯示，所以移動作品時兩邊都要更新。
+  if (await store.moveWork(item.work.id, delta)) {
+    treeProvider.refresh();
+    glossaryTreeProvider.refresh();
+  }
+}
+
 export async function importChapterFile(
   store: ProjectStore | undefined,
   treeProvider: WorkTreeProvider,

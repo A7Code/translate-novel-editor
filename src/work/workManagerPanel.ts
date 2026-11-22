@@ -18,6 +18,9 @@ type WebviewMessage =
   | { type: "importEpub" }
   | { type: "saveWork"; title: string; author: string; sourceLanguage: string; targetLanguage: string }
   | { type: "renameChapter"; chapterId: string; title: string }
+  | { type: "moveWorkUp" }
+  | { type: "moveWorkDown" }
+  | { type: "moveChapter"; chapterId: string; delta: -1 | 1 }
   | { type: "addChapter" }
   | { type: "importChapterFile" }
   | { type: "exportEpub" }
@@ -180,6 +183,18 @@ export class WorkManagerPanel {
         workTreeProvider.refresh();
         return;
       }
+      case "moveWorkUp":
+      case "moveWorkDown":
+        if (await store.moveWork(work.id, message.type === "moveWorkUp" ? -1 : 1)) {
+          workTreeProvider.refresh();
+          glossaryTreeProvider.refresh();
+        }
+        return;
+      case "moveChapter":
+        if (await store.moveChapter(work.id, message.chapterId, message.delta)) {
+          workTreeProvider.refresh();
+        }
+        return;
       case "addChapter":
         await addChapter(store, workTreeProvider, compareView, new WorkTreeItem(work, false));
         return;
@@ -268,6 +283,12 @@ export class WorkManagerPanel {
     color: var(--vscode-button-secondaryForeground);
   }
   button.secondary:hover { background-color: var(--vscode-button-secondaryHoverBackground); }
+  button:disabled, button:disabled:hover {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    cursor: default;
+    opacity: 0.45;
+  }
   button:focus-visible, input:focus-visible {
     outline: 1px solid var(--vscode-focusBorder);
     outline-offset: 1px;
@@ -404,6 +425,8 @@ export class WorkManagerPanel {
             <div id="detailAuthor" class="subtitle"></div>
           </div>
           <div class="actions">
+            <button id="moveWorkUp" data-action="moveWorkUp" class="secondary" aria-label="作品上移" title="作品上移">↑</button>
+            <button id="moveWorkDown" data-action="moveWorkDown" class="secondary" aria-label="作品下移" title="作品下移">↓</button>
             <button data-action="editWork" class="secondary">編輯資料</button>
             <button data-action="openGlossary" class="secondary">詞彙管理</button>
             <button id="exportEpubButton" data-action="exportEpub" class="secondary">匯出 EPUB</button>
@@ -450,6 +473,7 @@ export class WorkManagerPanel {
   let editingWork = false;
   let editingChapterId;
   let chapterDraft = "";
+  let pendingMoveFocus;
 
   function setWorkEditing(editing) {
     editingWork = editing;
@@ -600,6 +624,47 @@ export class WorkManagerPanel {
     const workEmpty = byId("workEmpty");
     workEmpty.hidden = visible.length > 0;
     workEmpty.textContent = query ? "沒有符合的作品。" : "目前沒有作品。";
+
+    // 搜尋時清單只顯示部分作品，移動結果看起來會不一致，所以先停用。
+    const selectedIndex = works.findIndex((work) => work.id === selectedWorkId);
+    const moveHint = query ? "清除搜尋後才能排序" : "";
+    byId("moveWorkUp").disabled = Boolean(query) || selectedIndex <= 0;
+    byId("moveWorkDown").disabled = Boolean(query) || selectedIndex < 0 || selectedIndex === works.length - 1;
+    byId("moveWorkUp").title = moveHint || "作品上移";
+    byId("moveWorkDown").title = moveHint || "作品下移";
+  }
+
+  function createChapterMoveButton(chapter, delta, disabled) {
+    const button = document.createElement("button");
+    const label = delta < 0 ? "上移" : "下移";
+    button.className = "secondary";
+    button.textContent = delta < 0 ? "↑" : "↓";
+    button.title = label;
+    button.disabled = disabled;
+    button.dataset.moveKey = chapter.id + ":" + delta;
+    button.setAttribute("aria-label", label + "「" + chapter.title + "」");
+    button.addEventListener("click", () => {
+      pendingMoveFocus = button.dataset.moveKey;
+      vscode.postMessage({ type: "moveChapter", chapterId: chapter.id, delta });
+    });
+    return button;
+  }
+
+  // 排序後整個清單會重畫，把焦點放回同一顆按鈕，鍵盤使用者才能連續移動。
+  function restoreMoveFocus() {
+    if (!pendingMoveFocus) {
+      return;
+    }
+    const [chapterId, delta] = pendingMoveFocus.split(":");
+    pendingMoveFocus = undefined;
+    const findButton = (direction) =>
+      chapterList.querySelector('button[data-move-key="' + chapterId + ":" + direction + '"]');
+    // 移到頂端或底端時原按鈕會停用，改把焦點交給同一列反方向的按鈕。
+    const button = findButton(delta);
+    const target = button && !button.disabled ? button : findButton(-Number(delta));
+    if (target && !target.disabled) {
+      target.focus();
+    }
   }
 
   function renderDetail() {
@@ -643,7 +708,11 @@ export class WorkManagerPanel {
       rename.textContent = "重新命名";
       rename.setAttribute("aria-label", "重新命名「" + chapter.title + "」");
       rename.addEventListener("click", () => startChapterEdit(chapter));
-      actions.appendChild(rename);
+      actions.append(
+        createChapterMoveButton(chapter, -1, index === 0),
+        createChapterMoveButton(chapter, 1, index === work.chapters.length - 1),
+        rename
+      );
       item.appendChild(actions);
       chapterList.appendChild(item);
     });
@@ -665,6 +734,7 @@ export class WorkManagerPanel {
       if (wasEditingChapter) {
         chapterList.querySelector("input")?.focus();
       }
+      restoreMoveFocus();
     }
   });
 
