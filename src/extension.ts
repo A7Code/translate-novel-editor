@@ -37,6 +37,7 @@ import {
 import { NovelCommentController } from "./comments/novelCommentController";
 import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
+import { upgradeEpubChapters } from "./epub/epubMigrationCommands";
 import {
   notifyProjectLoadFailure,
   RESTORE_PROJECT_COMMAND_ID,
@@ -262,6 +263,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.exportEpub", (item?: WorkTreeItem) =>
       exportEpub(projectStore, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.upgradeEpubChapters", (item?: WorkTreeItem) =>
+      upgradeEpubChapters(projectStore, workTreeProvider, commentController, item)
     ),
 
     vscode.commands.registerCommand(RESTORE_PROJECT_COMMAND_ID, () =>

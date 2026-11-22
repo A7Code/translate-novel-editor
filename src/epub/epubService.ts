@@ -1,8 +1,21 @@
 import * as cheerio from "cheerio";
 import JSZip from "jszip";
 import { posix as posixPath } from "node:path";
+import type { AnyNode, Element, Text } from "domhandler";
+import type { EpubExtractVersion } from "../core/types";
 
 const PARAGRAPH_SELECTOR = "p, h1, h2, h3, h4, h5, h6, blockquote, li";
+const PARAGRAPH_TAGS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "li"]);
+const RUBY_ANNOTATION_TAGS = new Set(["rt", "rp", "rtc"]);
+
+export const CURRENT_EPUB_EXTRACT_VERSION: EpubExtractVersion = 2;
+
+/** v2 的一個可翻譯片段，對應譯文的一行。 */
+export interface EpubSegment {
+  nodes: AnyNode[];
+  /** true 表示這是容器內的直屬文字，回填時替換這些節點，而不是整個元素。 */
+  isInlineRun: boolean;
+}
 
 export interface ParsedEpubChapter {
   title: string;
@@ -87,24 +100,51 @@ export async function parseEpub(bytes: Uint8Array): Promise<ParsedEpub> {
   };
 }
 
-export function extractParagraphTexts(html: string): string[] {
+/**
+ * 依抽取規則版本取出段落文字。
+ * - v1：舊規則，巢狀段落會重複、振假名會混入。只留給尚未升級的章節，確保行號不變。
+ * - v2：只取最內層區塊，排除振假名；容器的直屬文字會成為獨立段落。
+ */
+export function extractParagraphTexts(html: string, version: EpubExtractVersion): string[] {
   const $ = cheerio.load(html, { xmlMode: true });
-  return extractParagraphElements($).map((el) => $(el).text().trim().replace(/\s+/g, " "));
+  if (version === 1) {
+    return extractV1ParagraphElements($).map((el) => normalizeText($(el).text()));
+  }
+  return collectV2Segments($).map(segmentText);
 }
 
 /** 用譯文純文字（一行對一段）取代 html 裡每個段落的文字內容，其餘標籤結構原樣保留。 */
-export function applyTranslationToChapterHtml(html: string, translationText: string): string {
+export function applyTranslationToChapterHtml(
+  html: string,
+  translationText: string,
+  version: EpubExtractVersion
+): string {
   const $ = cheerio.load(html, { xmlMode: true });
-  const paragraphs = extractParagraphElements($);
   const lines = translationText.split(/\r?\n/);
 
-  paragraphs.forEach((el, index) => {
-    const line = lines[index]?.trim();
-    if (line) {
-      $(el).text(line);
-    }
-  });
+  if (version === 1) {
+    extractV1ParagraphElements($).forEach((el, index) => {
+      const line = lines[index]?.trim();
+      if (line) {
+        $(el).text(line);
+      }
+    });
+    return $.html();
+  }
 
+  collectV2Segments($).forEach((segment, index) => {
+    const line = lines[index]?.trim();
+    if (!line) {
+      return;
+    }
+    if (!segment.isInlineRun) {
+      $(segment.nodes[0]).text(line);
+      return;
+    }
+    const [first, ...rest] = segment.nodes;
+    $(first).replaceWith($("<span/>").text(line).contents());
+    rest.forEach((node) => $(node).remove());
+  });
   return $.html();
 }
 
@@ -133,11 +173,92 @@ export async function buildEpubZip(
   return zip.generateAsync({ type: "uint8array", mimeType: "application/epub+zip" });
 }
 
-function extractParagraphElements($: cheerio.CheerioAPI) {
+export function extractV1ParagraphElements($: cheerio.CheerioAPI): Element[] {
   return $.root()
     .find(PARAGRAPH_SELECTOR)
     .filter((_, el) => $(el).text().trim().length > 0)
     .toArray();
+}
+
+function normalizeText(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+function isElement(node: AnyNode): node is Element {
+  return node.type === "tag" || node.type === "script" || node.type === "style";
+}
+
+function isParagraphElement(node: AnyNode): node is Element {
+  return isElement(node) && PARAGRAPH_TAGS.has(node.name.toLowerCase());
+}
+
+/** 取得讀者看到的本文，排除 ruby 的讀音標註與註解節點。 */
+function visibleText(node: AnyNode): string {
+  if (node.type === "text") {
+    return (node as Text).data;
+  }
+  if (isElement(node) && RUBY_ANNOTATION_TAGS.has(node.name.toLowerCase())) {
+    return "";
+  }
+  if (isElement(node) || node.type === "cdata") {
+    return (node as Element).children.map(visibleText).join("");
+  }
+  return "";
+}
+
+export function segmentText(segment: EpubSegment): string {
+  return normalizeText(segment.nodes.map(visibleText).join(""));
+}
+
+/**
+ * 依文件順序收集可翻譯片段。內含其他段落的容器不直接抽取，但容器的直屬文字
+ * （例如 <li>項目<ul>…</ul></li> 的「項目」）會成為獨立片段，避免只取最內層時漏翻。
+ */
+export function collectV2Segments($: cheerio.CheerioAPI): EpubSegment[] {
+  const containsParagraph = new Map<AnyNode, boolean>();
+  const hasParagraphDescendant = (node: AnyNode): boolean => {
+    if (!isElement(node)) {
+      return false;
+    }
+    let result = containsParagraph.get(node);
+    if (result === undefined) {
+      result = node.children.some((child) => isParagraphElement(child) || hasParagraphDescendant(child));
+      containsParagraph.set(node, result);
+    }
+    return result;
+  };
+
+  const segments: EpubSegment[] = [];
+  const walk = (children: AnyNode[], insideParagraph: boolean): void => {
+    let run: AnyNode[] = [];
+    const flushRun = (): void => {
+      const start = run.findIndex((node) => visibleText(node).trim().length > 0);
+      if (insideParagraph && start >= 0) {
+        const end = run.length - [...run].reverse().findIndex((node) => visibleText(node).trim().length > 0);
+        segments.push({ nodes: run.slice(start, end), isInlineRun: true });
+      }
+      run = [];
+    };
+
+    for (const child of children) {
+      if (hasParagraphDescendant(child)) {
+        flushRun();
+        walk((child as Element).children, insideParagraph || isParagraphElement(child));
+      } else if (isParagraphElement(child)) {
+        flushRun();
+        const segment: EpubSegment = { nodes: [child], isInlineRun: false };
+        if (segmentText(segment)) {
+          segments.push(segment);
+        }
+      } else {
+        run.push(child);
+      }
+    }
+    flushRun();
+  };
+
+  walk($.root()[0].children as AnyNode[], false);
+  return segments;
 }
 
 function extractChapterTitle(html: string): string | undefined {
@@ -146,8 +267,8 @@ function extractChapterTitle(html: string): string | undefined {
   if (fromTitleTag) {
     return fromTitleTag;
   }
-  const fromHeading = $("h1, h2, h3").first().text().trim();
-  return fromHeading || undefined;
+  const heading = $("h1, h2, h3").first()[0];
+  return heading ? normalizeText(visibleText(heading)) || undefined : undefined;
 }
 
 function firstMetaText($opf: cheerio.CheerioAPI, localName: string): string | undefined {

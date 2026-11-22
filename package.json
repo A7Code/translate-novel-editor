@@ -211,6 +211,11 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "novelTranslate.upgradeEpubChapters",
+        "title": "小說翻譯：升級 EPUB 章節",
+        "category": "小說翻譯"
+      },
+      {
         "command": "novelTranslate.restoreProjectBackup",
         "title": "小說翻譯：從備份還原專案",
         "category": "小說翻譯"
@@ -300,6 +305,10 @@
         },
         {
           "command": "novelTranslate.exportEpub",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateWork-epub"
+        },
+        {
+          "command": "novelTranslate.upgradeEpubChapters",
           "when": "view == novelTranslate.works && viewItem == novelTranslateWork-epub"
         },
         {

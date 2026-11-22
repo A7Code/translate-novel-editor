@@ -3,7 +3,13 @@ import * as path from "node:path";
 import { getDefaultLanguages } from "../core/defaultLanguages";
 import { ProjectStore } from "../core/projectStore";
 import { WorkTreeItem, WorkTreeProvider } from "../work/workTreeProvider";
-import { applyTranslationToChapterHtml, buildEpubZip, extractParagraphTexts, parseEpub } from "./epubService";
+import {
+  applyTranslationToChapterHtml,
+  buildEpubZip,
+  CURRENT_EPUB_EXTRACT_VERSION,
+  extractParagraphTexts,
+  parseEpub
+} from "./epubService";
 
 export async function importEpub(store: ProjectStore | undefined, treeProvider: WorkTreeProvider): Promise<void> {
   if (!store) {
@@ -74,11 +80,17 @@ export async function importEpub(store: ProjectStore | undefined, treeProvider: 
       const increment = 100 / parsed.chapters.length;
       for (const chapter of parsed.chapters) {
         progress.report({ message: chapter.title, increment });
-        const paragraphs = extractParagraphTexts(chapter.html);
+        const paragraphs = extractParagraphTexts(chapter.html, CURRENT_EPUB_EXTRACT_VERSION);
         if (paragraphs.length === 0) {
           continue;
         }
-        await store.addChapter(work.id, chapter.title, paragraphs.join("\n"), chapter.contentPath);
+        await store.addChapter(
+          work.id,
+          chapter.title,
+          paragraphs.join("\n"),
+          chapter.contentPath,
+          CURRENT_EPUB_EXTRACT_VERSION
+        );
         importedCount++;
       }
       await store.writeEpubPackageFiles(work.id, parsed.files);
@@ -139,7 +151,10 @@ export async function exportEpub(store: ProjectStore | undefined, item?: WorkTre
           // 沒有譯文檔案就保留原文不動
         }
 
-        overrides.set(chapter.epubContentPath, applyTranslationToChapterHtml(html, translationText));
+        overrides.set(
+          chapter.epubContentPath,
+          applyTranslationToChapterHtml(html, translationText, chapter.extractVersion ?? 1)
+        );
       }
 
       const epubBytes = await buildEpubZip(files, overrides);
