@@ -7,6 +7,7 @@ import {
   GlossaryWorkTreeItem
 } from "./glossary/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
+import { WorkManagerPanel } from "./work/workManagerPanel";
 import { SettingsTreeProvider, TOGGLE_CHECKBOX_COMMAND_ID } from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./core/projectStore";
 import { CompareView } from "./compareView/compareView";
@@ -159,6 +160,13 @@ export function activate(context: vscode.ExtensionContext) {
     ),
 
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
+
+    // 從標題列開啟時沒有傳入節點，改用側邊欄目前選取的作品（或章節所屬作品）當預設選取。
+    vscode.commands.registerCommand("novelTranslate.openWorkManager", () => {
+      const selected = workTreeView.selection[0];
+      const workId = selected instanceof ChapterTreeItem ? selected.workId : selected?.work.id;
+      WorkManagerPanel.createOrShow(projectStore, workTreeProvider, glossaryTreeProvider, compareView, workId);
+    }),
 
     vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
       openCompareView(projectStore, compareView, item?.chapter)

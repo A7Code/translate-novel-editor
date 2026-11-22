@@ -69,6 +69,12 @@
         "icon": "$(edit)"
       },
       {
+        "command": "novelTranslate.openWorkManager",
+        "title": "小說翻譯：開啟作品管理",
+        "category": "小說翻譯",
+        "icon": "$(library)"
+      },
+      {
         "command": "novelTranslate.refreshWorks",
         "title": "小說翻譯：重新整理作品清單",
         "category": "小說翻譯",
@@ -189,6 +195,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "novelTranslate.openWorkManager",
+          "when": "view == novelTranslate.works",
+          "group": "navigation"
+        },
         {
           "command": "novelTranslate.createWork",
           "when": "view == novelTranslate.works",
