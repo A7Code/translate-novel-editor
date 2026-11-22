@@ -8,6 +8,8 @@ import { WorkConfig } from "../core/types";
 import { exportEpub, importEpub } from "../epub/epubCommands";
 import { GlossaryManagerPanel } from "../glossary/glossaryManagerPanel";
 import { GlossaryTreeProvider } from "../glossary/glossaryTreeProvider";
+import { findFirstIncompleteChapter } from "../translation/progress";
+import { ProgressService, WorkProgressSnapshot } from "../translation/progressService";
 import { addChapter, createWork, importChapterFile } from "./workCommands";
 import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
 
@@ -25,6 +27,7 @@ type WebviewMessage =
   | { type: "importChapterFile" }
   | { type: "exportEpub" }
   | { type: "openGlossary" }
+  | { type: "continueTranslation" }
   | { type: "openChapter"; chapterId: string };
 
 interface WorkManagerDependencies {
@@ -32,6 +35,7 @@ interface WorkManagerDependencies {
   workTreeProvider: WorkTreeProvider;
   glossaryTreeProvider: GlossaryTreeProvider;
   compareView: CompareView;
+  progress: ProgressService | undefined;
 }
 
 /**
@@ -47,6 +51,7 @@ export class WorkManagerPanel {
     workTreeProvider: WorkTreeProvider,
     glossaryTreeProvider: GlossaryTreeProvider,
     compareView: CompareView,
+    progress: ProgressService | undefined,
     initialWorkId?: string
   ): void {
     if (!store) {
@@ -71,7 +76,7 @@ export class WorkManagerPanel {
 
     WorkManagerPanel.current = new WorkManagerPanel(
       panel,
-      { store, workTreeProvider, glossaryTreeProvider, compareView },
+      { store, workTreeProvider, glossaryTreeProvider, compareView, progress },
       initialWorkId
     );
   }
@@ -93,7 +98,19 @@ export class WorkManagerPanel {
       undefined,
       this.disposables
     );
-    this.deps.workTreeProvider.onDidChangeTreeData(syncState, undefined, this.disposables);
+    this.deps.workTreeProvider.onDidChangeWorks(syncState, undefined, this.disposables);
+    // 進度用獨立訊息更新，不重畫章節列表，才不會打斷正在進行的重新命名。
+    this.deps.progress?.onDidChangeProgress(
+      (workId) => {
+        void this.panel.webview.postMessage({
+          type: "progress",
+          workId,
+          snapshot: this.deps.progress?.getSnapshot(workId)
+        });
+      },
+      undefined,
+      this.disposables
+    );
     this.deps.glossaryTreeProvider.onDidChangeTreeData(syncState, undefined, this.disposables);
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
     this.panel.webview.html = this.renderHtml();
@@ -207,6 +224,23 @@ export class WorkManagerPanel {
       case "openGlossary":
         GlossaryManagerPanel.createOrShow(store, workTreeProvider, glossaryTreeProvider, work.id);
         return;
+      case "continueTranslation": {
+        const snapshot = await this.deps.progress?.ensureWork(work.id);
+        if (!snapshot) {
+          return;
+        }
+        const chapterId = findFirstIncompleteChapter(
+          work.chapters.map((chapter) => chapter.id),
+          snapshot.chapters
+        );
+        const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
+        if (chapter) {
+          await openCompareView(store, compareView, chapter);
+        } else {
+          vscode.window.showInformationMessage("這部作品沒有未完成的章節。");
+        }
+        return;
+      }
       case "openChapter": {
         const chapter = work.chapters.find((candidate) => candidate.id === message.chapterId);
         if (chapter) {
@@ -227,9 +261,15 @@ export class WorkManagerPanel {
     if (!config.works.some((work) => work.id === this.selectedWorkId)) {
       this.selectedWorkId = config.works[0]?.id;
     }
+    const progress: Record<string, WorkProgressSnapshot | undefined> = {};
+    for (const work of config.works) {
+      progress[work.id] = this.deps.progress?.getSnapshot(work.id);
+      this.deps.progress?.requestWork(work.id);
+    }
     void this.panel.webview.postMessage({
       type: "state",
       selectedWorkId: this.selectedWorkId,
+      progress,
       works: config.works.map((work) => ({
         id: work.id,
         title: work.title,
@@ -393,13 +433,38 @@ export class WorkManagerPanel {
   }
   .chapter-button:hover { background-color: var(--vscode-list-hoverBackground); }
   .chapter-number { flex: 0 0 3em; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
-  .chapter-title { min-width: 0; overflow-wrap: anywhere; }
+  .chapter-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .bar {
+    display: block;
+    height: 6px;
+    overflow: hidden;
+    background-color: var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  }
+  .bar-fill { display: block; height: 100%; width: 0; background-color: var(--vscode-progressBar-background); }
+  .work-progress { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.85em; }
+  .work-progress .bar { flex: 1 1 auto; }
+  .work-progress-text { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+  .progress-summary { margin-top: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--vscode-panel-border); }
+  .progress-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 6px; }
+  #progressPercent { font-size: 1.4em; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #progressDetail { color: var(--vscode-descriptionForeground); }
+  .progress-summary .bar { height: 8px; }
+  .chapter-filter { display: flex; gap: 2px; }
+  .chapter-filter button[aria-pressed="true"] {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+  .chapter-progress { display: flex; flex: 0 0 230px; align-items: center; gap: 8px; }
+  .chapter-progress .bar { flex: 1 1 auto; }
+  .chapter-progress-text { flex: 0 0 125px; text-align: right; font-size: 0.9em; font-variant-numeric: tabular-nums; }
   .empty { padding: 16px 12px; color: var(--vscode-descriptionForeground); }
   @media (max-width: 640px) {
     .layout { display: block; height: auto; }
     .sidebar { border-right: none; border-bottom: 1px solid var(--vscode-panel-border); }
     #workList { max-height: 200px; }
     .detail { padding: 16px; }
+    .chapter-progress { flex-basis: 125px; }
+    .chapter-progress .bar { display: none; }
   }
 </style>
 </head>
@@ -425,6 +490,7 @@ export class WorkManagerPanel {
             <div id="detailAuthor" class="subtitle"></div>
           </div>
           <div class="actions">
+            <button id="continueButton" data-action="continueTranslation">繼續翻譯</button>
             <button id="moveWorkUp" data-action="moveWorkUp" class="secondary" aria-label="作品上移" title="作品上移">↑</button>
             <button id="moveWorkDown" data-action="moveWorkDown" class="secondary" aria-label="作品下移" title="作品下移">↓</button>
             <button data-action="editWork" class="secondary">編輯資料</button>
@@ -449,8 +515,20 @@ export class WorkManagerPanel {
           <div><dt>詞條</dt><dd id="factGlossary"></dd></div>
           <div><dt>來源</dt><dd id="factOrigin"></dd></div>
         </dl>
+        <section class="progress-summary" aria-label="翻譯進度">
+          <div class="progress-headline">
+            <span id="progressPercent"></span>
+            <span id="progressDetail"></span>
+          </div>
+          <span id="progressBar" class="bar" role="progressbar" aria-label="作品翻譯進度" aria-valuemin="0" aria-valuemax="100"><span class="bar-fill"></span></span>
+        </section>
         <div class="section-header">
           <h2>章節</h2>
+          <div id="chapterFilter" class="chapter-filter" role="group" aria-label="章節篩選">
+            <button class="secondary" data-filter="all">全部</button>
+            <button class="secondary" data-filter="incomplete">未完成</button>
+            <button class="secondary" data-filter="done">已完成</button>
+          </div>
           <div class="actions">
             <button data-action="addChapter">新增章節</button>
             <button data-action="importChapterFile" class="secondary">匯入文字檔</button>
@@ -474,6 +552,135 @@ export class WorkManagerPanel {
   let editingChapterId;
   let chapterDraft = "";
   let pendingMoveFocus;
+  let progressByWork = {};
+  let chapterFilter = "all";
+
+  const formatCount = (value) => value.toLocaleString("en-US");
+
+  function paintBar(bar, percent) {
+    bar.firstElementChild.style.width = (percent || 0) + "%";
+    if (percent === null || percent === undefined) {
+      bar.removeAttribute("aria-valuenow");
+    } else {
+      bar.setAttribute("aria-valuenow", String(percent));
+    }
+  }
+
+  function createBar() {
+    const bar = document.createElement("span");
+    bar.className = "bar";
+    bar.setAttribute("role", "progressbar");
+    bar.setAttribute("aria-valuemin", "0");
+    bar.setAttribute("aria-valuemax", "100");
+    const fill = document.createElement("span");
+    fill.className = "bar-fill";
+    bar.appendChild(fill);
+    return bar;
+  }
+
+  function matchesChapterFilter(progress) {
+    if (chapterFilter === "all" || !progress) {
+      return true;
+    }
+    if (chapterFilter === "done") {
+      return progress.status === "done";
+    }
+    return progress.status === "notStarted" || progress.status === "inProgress";
+  }
+
+  function paintWorkListProgress(button, work) {
+    const summary = progressByWork[work.id]?.summary;
+    const element = button.querySelector(".work-progress");
+    const text = !summary ? "計算中…" : summary.percent === null ? "—" : summary.percent + "%";
+    element.querySelector(".work-progress-text").textContent = text;
+    const bar = element.querySelector(".bar");
+    bar.setAttribute("aria-label", work.title + " 翻譯進度");
+    paintBar(bar, summary?.percent);
+  }
+
+  function paintChapterRow(item, work, chapter) {
+    const snapshot = progressByWork[work.id];
+    const progress = snapshot?.chapters[chapter.id];
+    const element = item.querySelector(".chapter-progress");
+    // 編輯中的列不套用篩選，翻譯進度更新時輸入框才不會消失。
+    item.hidden = chapter.id !== editingChapterId && !matchesChapterFilter(progress);
+    if (!element) {
+      return;
+    }
+
+    let text;
+    if (!snapshot) {
+      text = "計算中…";
+    } else if (!progress) {
+      text = "無法讀取";
+    } else if (progress.percent === null) {
+      text = "—";
+    } else {
+      text = progress.percent + "%" + (progress.status === "done" ? " ✓" : "") + "  " +
+        progress.translatedLines + "/" + progress.totalLines;
+    }
+    const extra = progress?.extraTranslationLines || 0;
+    const textElement = element.querySelector(".chapter-progress-text");
+    textElement.textContent = extra > 0 ? "⚠ " + text : text;
+    textElement.title = extra > 0 ? "有 " + extra + " 行譯文沒有對應原文" : "";
+    const bar = element.querySelector(".bar");
+    bar.setAttribute("aria-label", chapter.title + " 翻譯進度");
+    paintBar(bar, progress?.percent);
+  }
+
+  function paintSelectedProgress(work) {
+    const snapshot = progressByWork[work.id];
+    const summary = snapshot?.summary;
+    const percentElement = byId("progressPercent");
+    const detailElement = byId("progressDetail");
+    if (!summary) {
+      percentElement.textContent = "計算中…";
+      detailElement.textContent = "";
+    } else if (summary.percent === null) {
+      percentElement.textContent = "—";
+      detailElement.textContent = "尚無原文";
+    } else {
+      percentElement.textContent = summary.percent + "%";
+      const parts = [
+        formatCount(summary.translatedLines) + " / " + formatCount(summary.totalLines) + " 行",
+        "完成 " + summary.doneChapters + " / " + summary.countedChapters + " 章"
+      ];
+      if (summary.extraTranslationLines > 0) {
+        parts.push("⚠ " + formatCount(summary.extraTranslationLines) + " 行譯文沒有對應原文");
+      }
+      detailElement.textContent = parts.join(" · ");
+    }
+    if (snapshot?.unreadableChapterIds.length) {
+      detailElement.textContent += " · ⚠ " + snapshot.unreadableChapterIds.length + " 章無法讀取";
+    }
+    paintBar(byId("progressBar"), summary?.percent);
+
+    const hasIncomplete = Boolean(snapshot) && work.chapters.some((chapter) => {
+      const status = snapshot.chapters[chapter.id]?.status;
+      return status === "notStarted" || status === "inProgress";
+    });
+    byId("continueButton").disabled = !hasIncomplete;
+
+    let visibleRows = 0;
+    for (const item of chapterList.children) {
+      const chapter = work.chapters.find((candidate) => candidate.id === item.dataset.chapterRow);
+      if (chapter) {
+        paintChapterRow(item, work, chapter);
+        visibleRows += item.hidden ? 0 : 1;
+      }
+    }
+    const chapterEmpty = byId("chapterEmpty");
+    chapterEmpty.hidden = visibleRows > 0;
+    chapterEmpty.textContent = work.chapters.length > 0 ? "沒有符合篩選的章節。" : "這個作品還沒有章節。";
+  }
+
+  byId("chapterFilter").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-filter]");
+    if (button) {
+      chapterFilter = button.dataset.filter;
+      renderDetail();
+    }
+  });
 
   function setWorkEditing(editing) {
     editingWork = editing;
@@ -617,6 +824,12 @@ export class WorkManagerPanel {
       button.setAttribute("aria-current", String(work.id === selectedWorkId));
       appendSpan(button, "work-title", work.title);
       appendSpan(button, "work-meta", (work.author ? work.author + " · " : "") + work.chapters.length + " 章");
+      const workProgress = document.createElement("span");
+      workProgress.className = "work-progress";
+      workProgress.appendChild(createBar());
+      appendSpan(workProgress, "work-progress-text", "");
+      button.appendChild(workProgress);
+      paintWorkListProgress(button, work);
       item.appendChild(button);
       workList.appendChild(item);
     }
@@ -639,8 +852,9 @@ export class WorkManagerPanel {
     const label = delta < 0 ? "上移" : "下移";
     button.className = "secondary";
     button.textContent = delta < 0 ? "↑" : "↓";
-    button.title = label;
-    button.disabled = disabled;
+    // 篩選時相鄰章節可能被隱藏，移動結果會看起來不一致，所以先停用。
+    button.title = chapterFilter === "all" ? label : "切回「全部」後才能排序";
+    button.disabled = disabled || chapterFilter !== "all";
     button.dataset.moveKey = chapter.id + ":" + delta;
     button.setAttribute("aria-label", label + "「" + chapter.title + "」");
     button.addEventListener("click", () => {
@@ -684,9 +898,14 @@ export class WorkManagerPanel {
     byId("factOrigin").textContent = work.isEpub ? "EPUB 匯入" : "手動建立";
     byId("exportEpubButton").hidden = !work.isEpub;
 
+    for (const button of byId("chapterFilter").querySelectorAll("button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.filter === chapterFilter));
+    }
+
     chapterList.replaceChildren();
     work.chapters.forEach((chapter, index) => {
       const item = document.createElement("li");
+      item.dataset.chapterRow = chapter.id;
       if (chapter.id === editingChapterId) {
         renderChapterEditor(item);
         chapterList.appendChild(item);
@@ -699,6 +918,11 @@ export class WorkManagerPanel {
       button.title = "開啟原文／譯文比對";
       appendSpan(button, "chapter-number", String(index + 1));
       appendSpan(button, "chapter-title", chapter.title);
+      const chapterProgress = document.createElement("span");
+      chapterProgress.className = "chapter-progress";
+      chapterProgress.appendChild(createBar());
+      appendSpan(chapterProgress, "chapter-progress-text", "");
+      button.appendChild(chapterProgress);
       item.appendChild(button);
 
       const actions = document.createElement("div");
@@ -716,7 +940,7 @@ export class WorkManagerPanel {
       item.appendChild(actions);
       chapterList.appendChild(item);
     });
-    byId("chapterEmpty").hidden = work.chapters.length > 0;
+    paintSelectedProgress(work);
   }
 
   window.addEventListener("message", (event) => {
@@ -729,12 +953,27 @@ export class WorkManagerPanel {
       const wasEditingChapter = document.activeElement?.classList.contains("chapter-input");
       works = event.data.works;
       selectedWorkId = event.data.selectedWorkId;
+      progressByWork = event.data.progress;
       renderWorkList();
       renderDetail();
       if (wasEditingChapter) {
         chapterList.querySelector("input")?.focus();
       }
       restoreMoveFocus();
+    } else if (event.data.type === "progress") {
+      // 只更新進度文字與進度條，保留章節列表的 DOM、焦點和輸入中的內容。
+      progressByWork[event.data.workId] = event.data.snapshot;
+      const work = works.find((candidate) => candidate.id === event.data.workId);
+      if (!work) {
+        return;
+      }
+      const button = workList.querySelector('button[data-work-id="' + CSS.escape(work.id) + '"]');
+      if (button) {
+        paintWorkListProgress(button, work);
+      }
+      if (work.id === selectedWorkId) {
+        paintSelectedProgress(work);
+      }
     }
   });
 

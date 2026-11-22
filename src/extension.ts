@@ -46,6 +46,8 @@ import {
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./core/constants";
 import { safeRun } from "./core/safeRun";
 import { SidebarSectionStateStore } from "./core/sidebarStateStore";
+import { ProgressService } from "./translation/progressService";
+import { ProgressStatusBar } from "./translation/progressStatusBar";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -62,7 +64,9 @@ export function activate(context: vscode.ExtensionContext) {
     "novelTranslate.sidebarState.settings"
   );
 
-  const workTreeProvider = new WorkTreeProvider(projectStore, workSidebarState);
+  const progressService =
+    projectStore && workspaceFolder ? new ProgressService(projectStore, workspaceFolder) : undefined;
+  const workTreeProvider = new WorkTreeProvider(projectStore, workSidebarState, progressService);
   const glossaryTreeProvider = new GlossaryTreeProvider(projectStore, glossarySidebarState);
   const settingsTreeProvider = new SettingsTreeProvider(
     settingsSidebarState,
@@ -74,6 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
   const glossaryLanguageModeExtension = new GlossaryLanguageModeExtension(compareView);
   const commentController = new NovelCommentController(projectStore);
+  if (projectStore && progressService) {
+    context.subscriptions.push(progressService, new ProgressStatusBar(projectStore, compareView, progressService));
+  }
 
   const workTreeView = vscode.window.createTreeView("novelTranslate.works", {
     treeDataProvider: workTreeProvider
@@ -187,10 +194,19 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("novelTranslate.refreshWorks", () => workTreeProvider.refresh()),
 
     // 從標題列開啟時沒有傳入節點，改用側邊欄目前選取的作品（或章節所屬作品）當預設選取。
-    vscode.commands.registerCommand("novelTranslate.openWorkManager", () => {
+    // 狀態列會直接傳入作品 id。
+    vscode.commands.registerCommand("novelTranslate.openWorkManager", (requestedWorkId?: unknown) => {
       const selected = workTreeView.selection[0];
-      const workId = selected instanceof ChapterTreeItem ? selected.workId : selected?.work.id;
-      WorkManagerPanel.createOrShow(projectStore, workTreeProvider, glossaryTreeProvider, compareView, workId);
+      const selectedWorkId = selected instanceof ChapterTreeItem ? selected.workId : selected?.work.id;
+      const workId = typeof requestedWorkId === "string" ? requestedWorkId : selectedWorkId;
+      WorkManagerPanel.createOrShow(
+        projectStore,
+        workTreeProvider,
+        glossaryTreeProvider,
+        compareView,
+        progressService,
+        workId
+      );
     }),
 
     vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
