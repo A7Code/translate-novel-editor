@@ -110,6 +110,23 @@ export function summarizeWorkProgress(chapters: readonly ChapterProgress[]): Wor
   };
 }
 
+/**
+ * 從 fromLine 的下一行開始找未翻譯行，到結尾後繞回開頭，最後才檢查 fromLine 本身。
+ * fromLine 傳 -1 表示從第一行開始。全部翻完時回傳 undefined。
+ */
+export function findNextUntranslatedLine(original: string, translation: string, fromLine: number): number | undefined {
+  const originalLines = splitLines(original);
+  const translationLines = splitLines(translation);
+  const count = originalLines.length;
+  for (let offset = 1; offset <= count; offset++) {
+    const line = (fromLine + offset) % count;
+    if (hasContent(originalLines[line]) && !hasContent(translationLines[line])) {
+      return line;
+    }
+  }
+  return undefined;
+}
+
 /** 依章節順序找出第一個還沒翻完的章節；無原文的章節不需要翻譯，會被略過。 */
 export function findFirstIncompleteChapter(
   chapterIds: readonly string[],

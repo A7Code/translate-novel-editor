@@ -57,6 +57,10 @@
     ],
     "commands": [
       {
+        "command": "novelTranslate.jumpToNextUntranslated",
+        "title": "小說翻譯：跳到下一個未翻譯行"
+      },
+      {
         "command": "novelTranslate.createWork",
         "title": "小說翻譯：建立新作品",
         "category": "小說翻譯",
@@ -370,6 +374,12 @@
       ]
     },
     "keybindings": [
+      {
+        "command": "novelTranslate.jumpToNextUntranslated",
+        "key": "ctrl+alt+u",
+        "mac": "cmd+alt+u",
+        "when": "editorTextFocus && resourceLangId == novel-translation"
+      },
       {
         "command": "novelTranslate.suggestPunctuationFromOriginal",
         "key": "ctrl+alt+p",

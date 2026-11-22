@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeChapterProgress,
   findFirstIncompleteChapter,
+  findNextUntranslatedLine,
   summarizeWorkProgress
 } from "../translation/progress";
 
@@ -69,6 +70,20 @@ test("作品進度以行數加總，不平均各章百分比，且排除無原�
 
 test("沒有章節的作品百分比為 null", () => {
   assert.equal(summarizeWorkProgress([]).percent, null);
+});
+
+test("跳到下一個未翻譯行會略過空白原文，並在結尾繞回開頭", () => {
+  const original = "一\n二\n\n四\n五";
+  const translation = "A\n\n\nD";
+  assert.equal(findNextUntranslatedLine(original, translation, -1), 1);
+  assert.equal(findNextUntranslatedLine(original, translation, 1), 4);
+  assert.equal(findNextUntranslatedLine(original, translation, 4), 1);
+});
+
+test("只剩目前這行未翻時停在原地，全部翻完時回傳 undefined", () => {
+  assert.equal(findNextUntranslatedLine("一\n二", "A", 1), 1);
+  assert.equal(findNextUntranslatedLine("一\n二", "A\nB", 0), undefined);
+  assert.equal(findNextUntranslatedLine("", "", -1), undefined);
 });
 
 test("繼續翻譯會略過已完成與無原文的章節", () => {

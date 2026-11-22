@@ -8,6 +8,7 @@ import { WorkConfig } from "../core/types";
 import { exportEpub, importEpub } from "../epub/epubCommands";
 import { GlossaryManagerPanel } from "../glossary/glossaryManagerPanel";
 import { GlossaryTreeProvider } from "../glossary/glossaryTreeProvider";
+import { jumpToNextUntranslated } from "../translation/jumpCommands";
 import { findFirstIncompleteChapter } from "../translation/progress";
 import { ProgressService, WorkProgressSnapshot } from "../translation/progressService";
 import { addChapter, createWork, importChapterFile } from "./workCommands";
@@ -236,6 +237,7 @@ export class WorkManagerPanel {
         const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
         if (chapter) {
           await openCompareView(store, compareView, chapter);
+          await jumpToNextUntranslated(compareView, true);
         } else {
           vscode.window.showInformationMessage("這部作品沒有未完成的章節。");
         }

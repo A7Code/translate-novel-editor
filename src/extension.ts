@@ -46,6 +46,7 @@ import {
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./core/constants";
 import { safeRun } from "./core/safeRun";
 import { SidebarSectionStateStore } from "./core/sidebarStateStore";
+import { jumpToNextUntranslated } from "./translation/jumpCommands";
 import { ProgressService } from "./translation/progressService";
 import { ProgressStatusBar } from "./translation/progressStatusBar";
 
@@ -211,6 +212,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.openCompareView", (item?: ChapterTreeItem) =>
       openCompareView(projectStore, compareView, item?.chapter)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.jumpToNextUntranslated", () =>
+      safeRun(jumpToNextUntranslated(compareView), "跳到下一個未翻譯行")
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => scrollSyncExtension.toggle()),
