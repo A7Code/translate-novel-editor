@@ -4,6 +4,7 @@
 
 首個功能完整版本，涵蓋 Phase 0～5 全部功能（作品管理、原文／譯文比對、詞彙表自動完成、翻譯筆記、EPUB 匯入／匯出）。
 
+- 新增：側邊欄「設置」View 可設定新增作品的預設原文／譯文語言（`novelTranslate.defaultLanguage.source`、`novelTranslate.defaultLanguage.target`），留空則不啟用；建立作品與匯入 EPUB 時會預先填入，EPUB 已標示原文語言時優先採用 EPUB 的值。
 - 新增：比對畫面左右版面可切換。設定 `novelTranslate.compareView.translationOnLeft`（預設開啟，翻譯在左、原文在右）、指令「切換比對畫面版面（翻譯在左／原文在左）」（命令面板 Ctrl+Shift+P 可直接呼叫）、側邊欄「設置」View 新增對應核取方塊，三個入口皆可切換；設定值會套用到下一次開啟的比對畫面。
 - Phase 5：EPUB 匯入／匯出。新增「匯入 EPUB」建立新作品（自動依 spine 拆出章節、保留整個 EPUB 內容樹）；從 EPUB 匯入的作品可以「匯出為 EPUB」，把目前的譯文回填進原始排版後重新打包。新增執行期相依 `jszip`、`cheerio`。
 - Phase 4：翻譯筆記。用 VSCode 原生 Comments API 在原文／譯文檔案上留言討論串，資料持久化在 `.novel-translate/comments/<workId>/<chapterId>.json`；可切換「待確認／已解決」狀態、刪除整個討論串。
