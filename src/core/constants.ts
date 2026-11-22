@@ -15,3 +15,7 @@ export const PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY = "novelTranslate.punctuati
 
 // 觸發標點符號推薦用的文字，使用者在譯文那一行輸入到跟這個值完全相同時就會跳出推薦清單。
 export const PUNCTUATION_SUGGEST_TRIGGER_TEXT_SETTING_KEY = "novelTranslate.punctuationSuggest.triggerText";
+
+// 新增作品時預先填入的原文／譯文語言代碼，留空代表不啟用預設值。
+export const DEFAULT_SOURCE_LANGUAGE_SETTING_KEY = "novelTranslate.defaultLanguage.source";
+export const DEFAULT_TARGET_LANGUAGE_SETTING_KEY = "novelTranslate.defaultLanguage.target";

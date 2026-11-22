@@ -421,6 +421,16 @@
           "default": "`",
           "minLength": 1,
           "description": "在「譯文」編輯器輸入這段文字時，會跳出原文同一行標點符號的自動完成推薦清單（也可以用下方指定的快捷鍵直接插入並跳出清單）。"
+        },
+        "novelTranslate.defaultLanguage.source": {
+          "type": "string",
+          "default": "",
+          "description": "新增作品時預先填入的原文語言代碼（例如 ja、en）。留空則不啟用。"
+        },
+        "novelTranslate.defaultLanguage.target": {
+          "type": "string",
+          "default": "",
+          "description": "新增作品時預先填入的譯文語言代碼（例如 zh-TW）。留空則不啟用。"
         }
       }
     }

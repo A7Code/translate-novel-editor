@@ -8,7 +8,11 @@ import {
 } from "./glossary/glossaryTreeProvider";
 import { GlossaryManagerPanel } from "./glossary/glossaryManagerPanel";
 import { WorkManagerPanel } from "./work/workManagerPanel";
-import { SettingsTreeProvider, TOGGLE_CHECKBOX_COMMAND_ID } from "./settings/settingsTreeProvider";
+import {
+  EDIT_DEFAULT_LANGUAGE_COMMAND_ID,
+  SettingsTreeProvider,
+  TOGGLE_CHECKBOX_COMMAND_ID
+} from "./settings/settingsTreeProvider";
 import { ProjectStore } from "./core/projectStore";
 import { CompareView } from "./compareView/compareView";
 import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
@@ -92,6 +96,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand(TOGGLE_CHECKBOX_COMMAND_ID, (item: vscode.TreeItem) =>
       safeRun(settingsTreeProvider.toggleCheckbox(item), "切換設定核取方塊")
+    ),
+    vscode.commands.registerCommand(EDIT_DEFAULT_LANGUAGE_COMMAND_ID, (itemId: string) =>
+      safeRun(settingsTreeProvider.editDefaultLanguage(itemId), "修改預設語言")
     ),
 
     // 記住使用者展開／收合了哪些節點、最後選了哪個項目，下次開啟畫面時套用同樣的狀態。

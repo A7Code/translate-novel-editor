@@ -11,6 +11,8 @@ import {
 } from "../glossary/glossaryCategories";
 import {
   COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
+  DEFAULT_SOURCE_LANGUAGE_SETTING_KEY,
+  DEFAULT_TARGET_LANGUAGE_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
   GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY,
   PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
@@ -23,9 +25,26 @@ const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
 const PUNCTUATION_SUGGEST_ITEM_ID = "punctuationSuggest.enabled";
 const PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID = "punctuationSuggest.configureKeybinding";
+const DEFAULT_SOURCE_LANGUAGE_ITEM_ID = "defaultLanguage.source";
+const DEFAULT_TARGET_LANGUAGE_ITEM_ID = "defaultLanguage.target";
 
 // 讓使用者點擊整個設定項目（不只是核取方塊本身）時也能切換開關。
 export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleCheckbox";
+// 點擊預設語言項目時開啟輸入框；只供樹狀項目內部呼叫，不列入命令面板。
+export const EDIT_DEFAULT_LANGUAGE_COMMAND_ID = "novelTranslate.settingsTree.editDefaultLanguage";
+
+const DEFAULT_LANGUAGE_FIELDS: Record<string, { label: string; settingKey: string; example: string }> = {
+  [DEFAULT_SOURCE_LANGUAGE_ITEM_ID]: {
+    label: "原文語言",
+    settingKey: DEFAULT_SOURCE_LANGUAGE_SETTING_KEY,
+    example: "ja、en"
+  },
+  [DEFAULT_TARGET_LANGUAGE_ITEM_ID]: {
+    label: "譯文語言",
+    settingKey: DEFAULT_TARGET_LANGUAGE_SETTING_KEY,
+    example: "zh-TW"
+  }
+};
 
 // 群組節點的 id，同時也是記住展開狀態用的 key。
 const COMPARE_VIEW_GROUP_ID = "group.compareView";
@@ -38,9 +57,15 @@ const GLOSSARY_CATEGORY_WORK_PREFIX = "glossaryCategoryGroup/";
 // 「自動補完設定」底下的子群組：標點符號推薦（開關＋快捷鍵）跟詞語分類選擇都收在這裡。
 const AUTOCOMPLETE_SETTINGS_GROUP_ID = "group.autocompleteSettings";
 const PUNCTUATION_SUBGROUP_ID = "group.autocompleteSettings.punctuation";
+const DEFAULT_LANGUAGE_GROUP_ID = "group.defaultLanguage";
 
 // 最上層（根節點）會列出的群組。
-const ROOT_GROUP_IDS = [COMPARE_VIEW_GROUP_ID, GLOSSARY_GROUP_ID, AUTOCOMPLETE_SETTINGS_GROUP_ID];
+const ROOT_GROUP_IDS = [
+  COMPARE_VIEW_GROUP_ID,
+  GLOSSARY_GROUP_ID,
+  AUTOCOMPLETE_SETTINGS_GROUP_ID,
+  DEFAULT_LANGUAGE_GROUP_ID
+];
 
 // 群組底下是「其他群組」而不是設定項目時用這張表（跟 GROUP_ITEM_IDS 分開維護，
 // 因為兩者 getChildren() 時建立子節點的方式不同：一個是群組節點、一個是設定項目）。
@@ -52,14 +77,16 @@ const SUBGROUP_CHILDREN: Record<string, string[]> = {
 const GROUP_ITEM_IDS: Record<string, string[]> = {
   [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
   [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
-  [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID]
+  [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID],
+  [DEFAULT_LANGUAGE_GROUP_ID]: [DEFAULT_SOURCE_LANGUAGE_ITEM_ID, DEFAULT_TARGET_LANGUAGE_ITEM_ID]
 };
 const GROUP_LABELS: Record<string, string> = {
   [COMPARE_VIEW_GROUP_ID]: "比對畫面設定",
   [GLOSSARY_GROUP_ID]: "詞彙表設定",
   [GLOSSARY_CATEGORY_GROUP_ID]: "詞語分類選擇",
   [AUTOCOMPLETE_SETTINGS_GROUP_ID]: "自動補完設定",
-  [PUNCTUATION_SUBGROUP_ID]: "標點符號"
+  [PUNCTUATION_SUBGROUP_ID]: "標點符號",
+  [DEFAULT_LANGUAGE_GROUP_ID]: "新增作品預設語言"
 };
 
 // id 是否為任何一種群組節點（根群組、設定項目的父群組、或子群組群組），
@@ -181,6 +208,18 @@ class TranslationOnLeftSettingItem extends vscode.TreeItem {
   }
 }
 
+// 不用核取方塊：有填值就是啟用，留空就是不啟用，避免出現「勾選了卻沒有值」的狀態。
+class DefaultLanguageSettingItem extends vscode.TreeItem {
+  constructor(itemId: string, value: string) {
+    const field = DEFAULT_LANGUAGE_FIELDS[itemId];
+    super(field.label, vscode.TreeItemCollapsibleState.None);
+    this.id = itemId;
+    this.description = value || "未啟用";
+    this.tooltip = `新增作品時預先填入的${field.label}代碼（例如 ${field.example}）。點擊修改，留空則不啟用。`;
+    this.command = { command: EDIT_DEFAULT_LANGUAGE_COMMAND_ID, title: "修改預設語言", arguments: [itemId] };
+  }
+}
+
 // 「詞語分類選擇」群組底下，每個有詞彙的作品各自一個子群組，展開後才是該作品的分類開關。
 // 節點本身也是個核取方塊：這是「作品（大類型）」總開關，關閉後不論底下分類開關如何都
 // 不查詢，跟下一層的分類（小類型）開關分屬不同層級、互不取代，由 GlossaryCompletionProvider
@@ -240,7 +279,9 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY) ||
         event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY) ||
-        event.affectsConfiguration(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY)
+        event.affectsConfiguration(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY) ||
+        event.affectsConfiguration(DEFAULT_SOURCE_LANGUAGE_SETTING_KEY) ||
+        event.affectsConfiguration(DEFAULT_TARGET_LANGUAGE_SETTING_KEY)
       ) {
         this.emitter.fire();
       }
@@ -408,6 +449,12 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         return new PunctuationSuggestSettingItem(config.get<boolean>(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY, true));
       case PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID:
         return new ConfigurePunctuationKeybindingSettingItem();
+      case DEFAULT_SOURCE_LANGUAGE_ITEM_ID:
+      case DEFAULT_TARGET_LANGUAGE_ITEM_ID:
+        return new DefaultLanguageSettingItem(
+          itemId,
+          config.get<string>(DEFAULT_LANGUAGE_FIELDS[itemId].settingKey, "").trim()
+        );
       default:
         return undefined;
     }
@@ -456,6 +503,24 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
       return;
     }
     await vscode.workspace.getConfiguration().update(settingKey, checked, vscode.ConfigurationTarget.Global);
+  }
+
+  // 按 Esc 取消時不變更；確認空白內容則清除設定，也就是不啟用預設值。
+  async editDefaultLanguage(itemId: string): Promise<void> {
+    const field = DEFAULT_LANGUAGE_FIELDS[itemId];
+    if (!field) {
+      return;
+    }
+    const config = vscode.workspace.getConfiguration();
+    const value = await vscode.window.showInputBox({
+      prompt: `預設${field.label}代碼（留空則不啟用）`,
+      placeHolder: `例如 ${field.example}`,
+      value: config.get<string>(field.settingKey, "")
+    });
+    if (value === undefined) {
+      return;
+    }
+    await config.update(field.settingKey, value.trim() || undefined, vscode.ConfigurationTarget.Global);
   }
 
   // 使用者點擊設定項目本身（非核取方塊）時觸發，依目前勾選狀態反轉後套用同一套邏輯。
