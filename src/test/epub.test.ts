@@ -1,9 +1,10 @@
 import * as cheerio from "cheerio";
+import JSZip from "jszip";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CommentThreadData } from "../core/types";
 import { planChapterMigration, remapCommentThreads } from "../epub/epubMigration";
-import { applyTranslationToChapterHtml, extractParagraphTexts } from "../epub/epubService";
+import { applyTranslationToChapterHtml, buildEpubZip, extractParagraphTexts, parseEpub } from "../epub/epubService";
 
 const page = (body: string) => `<html xmlns="http://www.w3.org/1999/xhtml"><body>${body}</body></html>`;
 
@@ -41,6 +42,34 @@ test("v2 匯出時每段譯文都存在，未翻的行保留原文", () => {
   const html = page("<blockquote><p>A</p><p>B</p></blockquote><ol><li>C</li></ol><p><ruby>漢<rt>かん</rt></ruby>D</p>");
   const output = applyTranslationToChapterHtml(html, "甲\n\n丙\n丁", 2);
   assert.deepEqual(extractParagraphTexts(output, 2), ["甲", "B", "丙", "丁"]);
+});
+
+test("完整 EPUB 匯入再匯出後，引用、清單、振假名段落的譯文都存在", async () => {
+  const zip = new JSZip();
+  zip.file("mimetype", "application/epub+zip", { compression: "STORE" });
+  zip.file(
+    "META-INF/container.xml",
+    `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`
+  );
+  zip.file(
+    "OEBPS/content.opf",
+    `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>テスト</dc:title></metadata><manifest><item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`
+  );
+  zip.file(
+    "OEBPS/c1.xhtml",
+    page("<h1>序章</h1><blockquote><p>引用一</p><p>引用二</p></blockquote><ul><li>項目<ul><li>子項目</li></ul></li></ul><p><ruby>漢字<rt>かんじ</rt></ruby>を読む</p>")
+  );
+
+  const parsed = await parseEpub(await zip.generateAsync({ type: "uint8array" }));
+  const chapter = parsed.chapters[0];
+  const source = extractParagraphTexts(chapter.html, 2);
+  assert.deepEqual(source, ["序章", "引用一", "引用二", "項目", "子項目", "漢字を読む"]);
+
+  const translated = source.map((_, index) => `譯文${index}`);
+  const html = applyTranslationToChapterHtml(chapter.html, translated.join("\n"), 2);
+  const exported = await buildEpubZip(parsed.files, new Map([[chapter.contentPath, html]]));
+  const reparsed = await parseEpub(exported);
+  assert.deepEqual(extractParagraphTexts(reparsed.chapters[0].html, 2), translated);
 });
 
 test("v1 回填行為維持不變", () => {
