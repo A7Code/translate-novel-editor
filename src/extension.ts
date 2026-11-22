@@ -37,6 +37,11 @@ import {
 import { NovelCommentController } from "./comments/novelCommentController";
 import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
+import {
+  notifyProjectLoadFailure,
+  RESTORE_PROJECT_COMMAND_ID,
+  restoreProjectBackup
+} from "./core/projectRecoveryCommands";
 import { GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, TRANSLATION_LANGUAGE_ID } from "./core/constants";
 import { safeRun } from "./core/safeRun";
 import { SidebarSectionStateStore } from "./core/sidebarStateStore";
@@ -257,8 +262,20 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.exportEpub", (item?: WorkTreeItem) =>
       exportEpub(projectStore, item)
+    ),
+
+    vscode.commands.registerCommand(RESTORE_PROJECT_COMMAND_ID, () =>
+      restoreProjectBackup(projectStore, () => {
+        workTreeProvider.refresh();
+        glossaryTreeProvider.refresh();
+      })
     )
   );
+
+  if (projectStore) {
+    projectStore.onLoadFailure = notifyProjectLoadFailure;
+    safeRun(projectStore.backupProject(), "備份 project.json");
+  }
 
   safeRun(syncGlossaryAutocompleteLanguageMode(projectStore), "同步詞彙表自動完成語言模式");
 

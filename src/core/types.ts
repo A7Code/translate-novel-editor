@@ -5,7 +5,11 @@ export interface ChapterConfig {
   translationPath: string;
   /** 若此章節是從 EPUB 匯入的，記錄它在 EpubSourceInfo.packageDir 底下對應的 XHTML 相對路徑。 */
   epubContentPath?: string;
+  /** EPUB 段落抽取規則版本；未設定的 EPUB 章節視為 1。行號依此版本對應，不可任意更改。 */
+  extractVersion?: EpubExtractVersion;
 }
+
+export type EpubExtractVersion = 1 | 2;
 
 export interface EpubSourceInfo {
   /** 解壓後的 EPUB 內容存放位置，工作區相對路徑。 */

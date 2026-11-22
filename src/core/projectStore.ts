@@ -1,10 +1,19 @@
 import * as vscode from "vscode";
 import { posix as posixPath } from "node:path";
 import { randomUUID } from "node:crypto";
-import { ChapterConfig, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "./types";
+import { ChapterConfig, EpubExtractVersion, EpubSourceInfo, GlossaryEntry, ProjectConfig, WorkConfig } from "./types";
 import { getInitialPinyin } from "./pinyinUtil";
+import { JsonFileStore } from "./jsonFileStore";
+import { createWorkspaceFileOps } from "./workspaceFileOps";
 
 const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
+export const BACKUP_DIR = ".novel-translate/backups";
+const PROJECT_BACKUP_PREFIX = "project";
+const PROJECT_BACKUP_KEEP = 10;
+
+function isProjectConfig(value: unknown): value is ProjectConfig {
+  return typeof value === "object" && value !== null && Array.isArray((value as ProjectConfig).works);
+}
 
 function swapWithNeighbor<T>(items: T[], index: number, delta: -1 | 1): boolean {
   const target = index + delta;
@@ -16,9 +25,18 @@ function swapWithNeighbor<T>(items: T[], index: number, delta: -1 | 1): boolean 
 }
 
 export class ProjectStore {
-  private cache: ProjectConfig | undefined;
+  /** 共用的安全讀寫層，註解等其他資料檔也透過它寫入。 */
+  readonly files: JsonFileStore;
+  /** project.json 第一次被判定為無法讀取時呼叫，用來提示使用者還原。 */
+  onLoadFailure: ((error: Error) => void) | undefined;
 
-  constructor(private readonly workspaceFolder: vscode.WorkspaceFolder) {}
+  private cache: ProjectConfig | undefined;
+  private loading: Promise<ProjectConfig> | undefined;
+  private failure: Error | undefined;
+
+  constructor(private readonly workspaceFolder: vscode.WorkspaceFolder) {
+    this.files = new JsonFileStore(createWorkspaceFileOps(workspaceFolder.uri));
+  }
 
   resolveUri(relativePath: string): vscode.Uri {
     return vscode.Uri.joinPath(this.workspaceFolder.uri, relativePath);
@@ -26,24 +44,96 @@ export class ProjectStore {
 
   refresh(): void {
     this.cache = undefined;
+    this.loading = undefined;
   }
 
+  /** project.json 目前是否無法讀取。此時畫面顯示空清單，但所有寫入都會被拒絕。 */
+  get loadFailure(): Error | undefined {
+    return this.failure;
+  }
+
+  /**
+   * 讀取專案設定。只有檔案不存在才視為新專案；檔案損毀時回傳空的記憶體資料讓畫面能顯示，
+   * 並由 loadForWrite 擋下寫入，避免空資料覆蓋使用者的檔案。
+   */
   async load(): Promise<ProjectConfig> {
     if (this.cache) {
       return this.cache;
     }
-    try {
-      const bytes = await vscode.workspace.fs.readFile(this.resolveUri(PROJECT_CONFIG_RELATIVE_PATH));
-      this.cache = JSON.parse(Buffer.from(bytes).toString("utf8")) as ProjectConfig;
-    } catch {
-      this.cache = { version: 1, works: [] };
+    if (!this.loading) {
+      const loading: Promise<ProjectConfig> = this.readConfig(() => this.loading === loading).finally(() => {
+        if (this.loading === loading) {
+          this.loading = undefined;
+        }
+      });
+      this.loading = loading;
     }
-    this.cache.categories ??= [];
-    for (const work of this.cache.works) {
+    return this.loading;
+  }
+
+  private async readConfig(isCurrent: () => boolean): Promise<ProjectConfig> {
+    const result = await this.files.readJson(PROJECT_CONFIG_RELATIVE_PATH, isProjectConfig);
+    const config: ProjectConfig = result.kind === "ok" ? result.value : { version: 1, works: [] };
+    config.categories ??= [];
+    for (const work of config.works) {
       work.glossary ??= [];
       work.disabledGlossaryCategories ??= [];
     }
-    return this.cache;
+    if (!isCurrent()) {
+      return config;
+    }
+
+    this.cache = config;
+    if (result.kind === "unreadable") {
+      const isNewFailure = !this.failure;
+      this.failure = result.error;
+      if (isNewFailure) {
+        this.onLoadFailure?.(result.error);
+      }
+    } else {
+      this.failure = undefined;
+    }
+    return config;
+  }
+
+  private async loadForWrite(): Promise<ProjectConfig> {
+    if (this.failure) {
+      // 使用者可能已在外部修好檔案，寫入前重新確認一次。
+      this.refresh();
+    }
+    const config = await this.load();
+    if (this.failure) {
+      throw new Error(
+        `project.json 無法讀取，為避免覆蓋資料已停止寫入。請執行「小說翻譯：從備份還原專案」。（${this.failure.message}）`
+      );
+    }
+    return config;
+  }
+
+  /** 備份目前有效的 project.json。檔案損毀或內容與最新備份相同時不會建立新備份。 */
+  backupProject(): Promise<string | undefined> {
+    return this.files.backup(PROJECT_CONFIG_RELATIVE_PATH, BACKUP_DIR, PROJECT_BACKUP_PREFIX, PROJECT_BACKUP_KEEP);
+  }
+
+  listProjectBackups(): Promise<string[]> {
+    return this.files.listBackups(BACKUP_DIR, PROJECT_BACKUP_PREFIX);
+  }
+
+  async restoreProjectBackup(backupName: string): Promise<void> {
+    await this.files.restore(PROJECT_CONFIG_RELATIVE_PATH, BACKUP_DIR, backupName, PROJECT_BACKUP_PREFIX);
+    this.failure = undefined;
+    this.refresh();
+  }
+
+  async setChapterExtractVersion(workId: string, chapterId: string, version: EpubExtractVersion): Promise<void> {
+    const config = await this.loadForWrite();
+    const work = this.findWork(config, workId);
+    const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
+    if (!chapter) {
+      throw new Error(`找不到章節：${chapterId}`);
+    }
+    chapter.extractVersion = version;
+    await this.save(config);
   }
 
   async addWork(input: {
@@ -52,7 +142,7 @@ export class ProjectStore {
     sourceLanguage?: string;
     targetLanguage?: string;
   }): Promise<WorkConfig> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work: WorkConfig = {
       id: `work-${randomUUID().slice(0, 8)}`,
       title: input.title,
@@ -71,7 +161,7 @@ export class ProjectStore {
     workId: string,
     input: { title: string; author?: string; sourceLanguage?: string; targetLanguage?: string }
   ): Promise<WorkConfig> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     work.title = input.title;
     work.author = input.author;
@@ -85,9 +175,10 @@ export class ProjectStore {
     workId: string,
     title: string,
     originalContent = "",
-    epubContentPath?: string
+    epubContentPath?: string,
+    extractVersion?: EpubExtractVersion
   ): Promise<ChapterConfig> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
 
     const index = work.chapters.length + 1;
@@ -98,7 +189,14 @@ export class ProjectStore {
     await this.writeTextFile(originalPath, originalContent);
     await this.writeTextFile(translationPath, "");
 
-    const chapter: ChapterConfig = { id: chapterId, title, originalPath, translationPath, epubContentPath };
+    const chapter: ChapterConfig = {
+      id: chapterId,
+      title,
+      originalPath,
+      translationPath,
+      epubContentPath,
+      extractVersion
+    };
     work.chapters.push(chapter);
     await this.save(config);
     return chapter;
@@ -106,7 +204,7 @@ export class ProjectStore {
 
   // 只改顯示用標題；章節 id 與檔案路徑維持不變，註解和已開啟的比對分頁才不會失去對應。
   async renameChapter(workId: string, chapterId: string, title: string): Promise<ChapterConfig> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
     if (!chapter) {
@@ -118,7 +216,7 @@ export class ProjectStore {
   }
 
   async moveWork(workId: string, delta: -1 | 1): Promise<boolean> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const index = config.works.findIndex((candidate) => candidate.id === workId);
     if (index < 0 || !swapWithNeighbor(config.works, index, delta)) {
       return false;
@@ -129,7 +227,7 @@ export class ProjectStore {
 
   // 只調整陣列順序，章節 id 不重新編號，檔案路徑與註解的對應才不會錯位。
   async moveChapter(workId: string, chapterId: string, delta: -1 | 1): Promise<boolean> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     const index = work.chapters.findIndex((candidate) => candidate.id === chapterId);
     if (index < 0 || !swapWithNeighbor(work.chapters, index, delta)) {
@@ -143,7 +241,7 @@ export class ProjectStore {
     workId: string,
     input: { term: string; translation: string; category?: string; note?: string }
   ): Promise<GlossaryEntry> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
 
     const entry: GlossaryEntry = {
@@ -166,7 +264,7 @@ export class ProjectStore {
     entryId: string,
     input: { term: string; translation: string; category?: string; note?: string }
   ): Promise<GlossaryEntry> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     const entry = work.glossary.find((candidate) => candidate.id === entryId);
     if (!entry) {
@@ -198,7 +296,7 @@ export class ProjectStore {
   }
 
   async deleteGlossaryEntry(workId: string, entryId: string): Promise<void> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     work.glossary = work.glossary.filter((candidate) => candidate.id !== entryId);
     await this.save(config);
@@ -207,7 +305,7 @@ export class ProjectStore {
   // 設定「某作品底下的某個詞彙分類」是否在自動完成時被查詢，設定值跟作品資料一起存進
   // project.json，重啟 VS Code 後會自動還原，不需要另外處理持久化。
   async setGlossaryCategoryEnabled(workId: string, category: string, enabled: boolean): Promise<void> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     const disabled = new Set(work.disabledGlossaryCategories ?? []);
     if (enabled) {
@@ -222,7 +320,7 @@ export class ProjectStore {
   // 設定「某作品整體」是否參與自動完成；關閉後不論底下個別分類開關如何都不查詢。
   // 跟 setGlossaryCategoryEnabled 分屬不同層級、互不取代，同樣存進 project.json 自動持久化。
   async setWorkGlossaryAutocompleteEnabled(workId: string, enabled: boolean): Promise<void> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     work.glossaryAutocompleteEnabled = enabled;
     await this.save(config);
@@ -258,7 +356,7 @@ export class ProjectStore {
   }
 
   async setEpubSource(workId: string, opfPath: string): Promise<EpubSourceInfo> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     const epubSource: EpubSourceInfo = { packageDir: `.novel-translate/epub/${work.id}/package`, opfPath };
     work.epubSource = epubSource;
@@ -267,7 +365,7 @@ export class ProjectStore {
   }
 
   async writeEpubPackageFiles(workId: string, files: Map<string, Uint8Array>): Promise<void> {
-    const config = await this.load();
+    const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
     if (!work.epubSource) {
       throw new Error(`作品尚未設定 EPUB 來源：${workId}`);
@@ -325,9 +423,6 @@ export class ProjectStore {
 
   private async save(config: ProjectConfig): Promise<void> {
     this.cache = config;
-    const dirUri = this.resolveUri(posixPath.dirname(PROJECT_CONFIG_RELATIVE_PATH));
-    await vscode.workspace.fs.createDirectory(dirUri);
-    const bytes = Buffer.from(JSON.stringify(config, null, 2), "utf8");
-    await vscode.workspace.fs.writeFile(this.resolveUri(PROJECT_CONFIG_RELATIVE_PATH), bytes);
+    await this.files.writeJson(PROJECT_CONFIG_RELATIVE_PATH, config);
   }
 }

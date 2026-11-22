@@ -209,6 +209,11 @@
         "title": "小說翻譯：匯出為 EPUB",
         "category": "小說翻譯",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "novelTranslate.restoreProjectBackup",
+        "title": "小說翻譯：從備份還原專案",
+        "category": "小說翻譯"
       }
     ],
     "menus": {
@@ -442,8 +447,8 @@
     "package": "node esbuild.js --production",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "pretest": "npm run compile && npm run lint",
-    "test": "vscode-test",
+    "pretest": "npm run check-types && npm run compile && npm run lint",
+    "test": "node scripts/run-unit-tests.js",
     "package-vsix": "node -e \"require('fs').mkdirSync('releases',{recursive:true})\" && vsce package -o releases/ --no-rewrite-relative-links"
   },
   "devDependencies": {

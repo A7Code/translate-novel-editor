@@ -35,6 +35,8 @@ export class NovelCommentController implements vscode.Disposable {
   private readonly threadMeta = new Map<vscode.CommentThread, ThreadMeta>();
   private readonly chapterThreads = new Map<string, Set<vscode.CommentThread>>();
   private readonly materializedUris = new Set<string>();
+  /** 已刪除但尚未成功寫回檔案的討論串 id；寫入失敗時保留，下次儲存再重試。 */
+  private readonly pendingDeletes = new Map<string, Set<string>>();
   private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(private readonly store: ProjectStore | undefined) {
@@ -104,18 +106,25 @@ export class NovelCommentController implements vscode.Disposable {
       thread.state === vscode.CommentThreadState.Resolved
         ? vscode.CommentThreadState.Unresolved
         : vscode.CommentThreadState.Resolved;
-    void this.persistChapter(meta.workId, meta.chapterId);
+    safeRun(this.persistChapter(meta.workId, meta.chapterId), "儲存註解");
   }
 
   deleteThread(thread: vscode.CommentThread): void {
     const meta = this.threadMeta.get(thread);
     this.threadMeta.delete(thread);
     if (meta) {
-      this.chapterThreads.get(`${meta.workId}/${meta.chapterId}`)?.delete(thread);
+      const chapterKey = `${meta.workId}/${meta.chapterId}`;
+      this.chapterThreads.get(chapterKey)?.delete(thread);
+      let pending = this.pendingDeletes.get(chapterKey);
+      if (!pending) {
+        pending = new Set();
+        this.pendingDeletes.set(chapterKey, pending);
+      }
+      pending.add(meta.id);
     }
     thread.dispose();
     if (meta) {
-      void this.persistChapter(meta.workId, meta.chapterId);
+      safeRun(this.persistChapter(meta.workId, meta.chapterId), "儲存註解");
     }
   }
 
@@ -221,6 +230,38 @@ export class NovelCommentController implements vscode.Disposable {
       }
     }
 
-    await this.commentStore.save(workId, chapterId, data);
+    const chapterKey = `${workId}/${chapterId}`;
+    const pending = this.pendingDeletes.get(chapterKey);
+    const deletedIds = new Set(pending ?? []);
+    try {
+      await this.commentStore.update(workId, chapterId, data, deletedIds);
+      for (const id of deletedIds) {
+        pending?.delete(id);
+      }
+    } catch (error) {
+      console.error("[novelTranslate] 儲存註解失敗：", error);
+      vscode.window.showErrorMessage(`儲存註解失敗：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** 章節的註解檔被外部流程（例如 EPUB 升級）改寫後，重新載入目前開啟的文件。 */
+  async reloadChapter(workId: string, chapterId: string): Promise<void> {
+    const chapterKey = `${workId}/${chapterId}`;
+    const uris = new Set<string>();
+    for (const thread of this.chapterThreads.get(chapterKey) ?? []) {
+      uris.add(thread.uri.toString());
+      this.threadMeta.delete(thread);
+      thread.dispose();
+    }
+    this.chapterThreads.delete(chapterKey);
+    this.pendingDeletes.delete(chapterKey);
+
+    for (const document of vscode.workspace.textDocuments) {
+      const found = await this.store?.findChapterForDocumentUri(document.uri);
+      if (found?.workId === workId && found.chapter.id === chapterId) {
+        this.materializedUris.delete(document.uri.toString());
+        await this.materialize(document);
+      }
+    }
   }
 }
