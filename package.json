@@ -87,6 +87,12 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "novelTranslate.renameChapter",
+        "title": "小說翻譯：重新命名章節",
+        "category": "小說翻譯",
+        "icon": "$(edit)"
+      },
+      {
         "command": "novelTranslate.importChapterFile",
         "title": "小說翻譯：匯入文字檔為章節",
         "category": "小說翻譯"
@@ -231,11 +237,27 @@
           "group": "navigation"
         }
       ],
+      "commandPalette": [
+        {
+          "command": "novelTranslate.renameChapter",
+          "when": "false"
+        }
+      ],
       "view/item/context": [
         {
           "command": "novelTranslate.addChapter",
           "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/",
           "group": "inline"
+        },
+        {
+          "command": "novelTranslate.editWork",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/",
+          "group": "1_modification"
+        },
+        {
+          "command": "novelTranslate.renameChapter",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateChapter",
+          "group": "1_modification"
         },
         {
           "command": "novelTranslate.importChapterFile",

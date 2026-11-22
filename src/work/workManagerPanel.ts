@@ -8,7 +8,7 @@ import { WorkConfig } from "../core/types";
 import { exportEpub, importEpub } from "../epub/epubCommands";
 import { GlossaryManagerPanel } from "../glossary/glossaryManagerPanel";
 import { GlossaryTreeProvider } from "../glossary/glossaryTreeProvider";
-import { addChapter, createWork, editWork, importChapterFile } from "./workCommands";
+import { addChapter, createWork, importChapterFile } from "./workCommands";
 import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
 
 type WebviewMessage =
@@ -16,7 +16,8 @@ type WebviewMessage =
   | { type: "selectWork"; workId: string }
   | { type: "addWork" }
   | { type: "importEpub" }
-  | { type: "editWork" }
+  | { type: "saveWork"; title: string; author: string; sourceLanguage: string; targetLanguage: string }
+  | { type: "renameChapter"; chapterId: string; title: string }
   | { type: "addChapter" }
   | { type: "importChapterFile" }
   | { type: "exportEpub" }
@@ -153,9 +154,32 @@ export class WorkManagerPanel {
     }
 
     switch (message.type) {
-      case "editWork":
-        await editWork(store, workTreeProvider, glossaryTreeProvider, work.id);
+      case "saveWork": {
+        const title = message.title.trim();
+        if (!title) {
+          vscode.window.showErrorMessage("請輸入作品名稱。");
+          return;
+        }
+        await store.updateWork(work.id, {
+          title,
+          author: message.author.trim() || undefined,
+          sourceLanguage: message.sourceLanguage.trim() || undefined,
+          targetLanguage: message.targetLanguage.trim() || undefined
+        });
+        workTreeProvider.refresh();
+        glossaryTreeProvider.refresh();
         return;
+      }
+      case "renameChapter": {
+        const title = message.title.trim();
+        if (!title) {
+          vscode.window.showErrorMessage("請輸入章節標題。");
+          return;
+        }
+        await store.renameChapter(work.id, message.chapterId, title);
+        workTreeProvider.refresh();
+        return;
+      }
       case "addChapter":
         await addChapter(store, workTreeProvider, compareView, new WorkTreeItem(work, false));
         return;
@@ -309,11 +333,38 @@ export class WorkManagerPanel {
   .section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
   .section-header h2 { margin: 8px 0; }
   #chapterList { margin: 0; padding: 0; list-style: none; }
-  #chapterList li { border-bottom: 1px solid var(--vscode-panel-border); }
+  #chapterList li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+  .chapter-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+  .chapter-input { flex: 1 1 auto; min-width: 0; margin: 3px 0; }
+  .text-input {
+    width: 100%;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    padding: 4px 8px;
+    font: inherit;
+  }
+  #workForm {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+    padding: 12px 0;
+    border-top: 1px solid var(--vscode-panel-border);
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+  #workForm label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9em; color: var(--vscode-descriptionForeground); }
+  #workForm .form-actions { display: flex; grid-column: 1 / -1; gap: 6px; }
   .chapter-button {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
     gap: 12px;
-    width: 100%;
     padding: 7px 4px;
     color: var(--vscode-foreground);
     background: transparent;
@@ -358,7 +409,17 @@ export class WorkManagerPanel {
             <button id="exportEpubButton" data-action="exportEpub" class="secondary">匯出 EPUB</button>
           </div>
         </div>
-        <dl class="facts">
+        <form id="workForm" hidden>
+          <label>作品名稱<input id="formTitle" class="text-input" type="text" required /></label>
+          <label>作者<input id="formAuthor" class="text-input" type="text" /></label>
+          <label>原文語言<input id="formSource" class="text-input" type="text" placeholder="例如 ja、en" /></label>
+          <label>譯文語言<input id="formTarget" class="text-input" type="text" placeholder="例如 zh-TW" /></label>
+          <div class="form-actions">
+            <button type="submit">儲存</button>
+            <button id="cancelWorkEdit" type="button" class="secondary">取消</button>
+          </div>
+        </form>
+        <dl id="workFacts" class="facts">
           <div><dt>原文語言</dt><dd id="factSource"></dd></div>
           <div><dt>譯文語言</dt><dd id="factTarget"></dd></div>
           <div><dt>章節</dt><dd id="factChapters"></dd></div>
@@ -386,6 +447,99 @@ export class WorkManagerPanel {
   const chapterList = byId("chapterList");
   let works = [];
   let selectedWorkId;
+  let editingWork = false;
+  let editingChapterId;
+  let chapterDraft = "";
+
+  function setWorkEditing(editing) {
+    editingWork = editing;
+    byId("workForm").hidden = !editing;
+    byId("workFacts").hidden = editing;
+  }
+
+  function openWorkForm() {
+    const work = works.find((candidate) => candidate.id === selectedWorkId);
+    if (!work) {
+      return;
+    }
+    byId("formTitle").value = work.title;
+    byId("formAuthor").value = work.author || "";
+    byId("formSource").value = work.sourceLanguage || "";
+    byId("formTarget").value = work.targetLanguage || "";
+    setWorkEditing(true);
+    byId("formTitle").focus();
+  }
+
+  byId("workForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const title = byId("formTitle").value.trim();
+    if (!title) {
+      byId("formTitle").focus();
+      return;
+    }
+    vscode.postMessage({
+      type: "saveWork",
+      title,
+      author: byId("formAuthor").value,
+      sourceLanguage: byId("formSource").value,
+      targetLanguage: byId("formTarget").value
+    });
+    setWorkEditing(false);
+  });
+  byId("cancelWorkEdit").addEventListener("click", () => setWorkEditing(false));
+
+  function startChapterEdit(chapter) {
+    editingChapterId = chapter.id;
+    chapterDraft = chapter.title;
+    renderDetail();
+    const input = chapterList.querySelector("input");
+    input.focus();
+    input.select();
+  }
+
+  function stopChapterEdit() {
+    editingChapterId = undefined;
+    renderDetail();
+  }
+
+  function commitChapterEdit() {
+    const title = chapterDraft.trim();
+    if (!title) {
+      return;
+    }
+    vscode.postMessage({ type: "renameChapter", chapterId: editingChapterId, title });
+    stopChapterEdit();
+  }
+
+  function renderChapterEditor(item) {
+    const input = document.createElement("input");
+    input.className = "text-input chapter-input";
+    input.type = "text";
+    input.value = chapterDraft;
+    input.setAttribute("aria-label", "章節標題");
+    input.addEventListener("input", () => { chapterDraft = input.value; });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitChapterEdit();
+      } else if (event.key === "Escape") {
+        stopChapterEdit();
+      }
+    });
+    item.appendChild(input);
+
+    const actions = document.createElement("div");
+    actions.className = "chapter-actions";
+    const save = document.createElement("button");
+    save.textContent = "儲存";
+    save.addEventListener("click", commitChapterEdit);
+    const cancel = document.createElement("button");
+    cancel.className = "secondary";
+    cancel.textContent = "取消";
+    cancel.addEventListener("click", stopChapterEdit);
+    actions.append(save, cancel);
+    item.appendChild(actions);
+  }
 
   byId("addWorkButton").addEventListener("click", () => vscode.postMessage({ type: "addWork" }));
   byId("importEpubButton").addEventListener("click", () => vscode.postMessage({ type: "importEpub" }));
@@ -393,7 +547,12 @@ export class WorkManagerPanel {
 
   byId("workDetail").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
-    if (button) {
+    if (!button) {
+      return;
+    }
+    if (button.dataset.action === "editWork") {
+      openWorkForm();
+    } else {
       vscode.postMessage({ type: button.dataset.action });
     }
   });
@@ -463,6 +622,12 @@ export class WorkManagerPanel {
     chapterList.replaceChildren();
     work.chapters.forEach((chapter, index) => {
       const item = document.createElement("li");
+      if (chapter.id === editingChapterId) {
+        renderChapterEditor(item);
+        chapterList.appendChild(item);
+        return;
+      }
+
       const button = document.createElement("button");
       button.className = "chapter-button";
       button.dataset.chapterId = chapter.id;
@@ -470,6 +635,16 @@ export class WorkManagerPanel {
       appendSpan(button, "chapter-number", String(index + 1));
       appendSpan(button, "chapter-title", chapter.title);
       item.appendChild(button);
+
+      const actions = document.createElement("div");
+      actions.className = "chapter-actions";
+      const rename = document.createElement("button");
+      rename.className = "secondary";
+      rename.textContent = "重新命名";
+      rename.setAttribute("aria-label", "重新命名「" + chapter.title + "」");
+      rename.addEventListener("click", () => startChapterEdit(chapter));
+      actions.appendChild(rename);
+      item.appendChild(actions);
       chapterList.appendChild(item);
     });
     byId("chapterEmpty").hidden = work.chapters.length > 0;
@@ -477,10 +652,19 @@ export class WorkManagerPanel {
 
   window.addEventListener("message", (event) => {
     if (event.data.type === "state") {
+      // 切換到別的作品時放棄編輯中的內容；同一作品的背景同步則保留使用者正在輸入的草稿。
+      if (event.data.selectedWorkId !== selectedWorkId) {
+        setWorkEditing(false);
+        editingChapterId = undefined;
+      }
+      const wasEditingChapter = document.activeElement?.classList.contains("chapter-input");
       works = event.data.works;
       selectedWorkId = event.data.selectedWorkId;
       renderWorkList();
       renderDetail();
+      if (wasEditingChapter) {
+        chapterList.querySelector("input")?.focus();
+      }
     }
   });
 

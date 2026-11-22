@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
 import { CompareView } from "../compareView/compareView";
-import { WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
+import { ChapterTreeItem, WorkTreeItem, WorkTreeProvider } from "./workTreeProvider";
 import { GlossaryTreeProvider } from "../glossary/glossaryTreeProvider";
 import { openCompareView } from "../compareView/compareCommands";
 
@@ -132,6 +132,29 @@ export async function addChapter(
   const chapter = await store.addChapter(workId, title.trim());
   treeProvider.refresh();
   await openCompareView(store, compareView, chapter);
+}
+
+export async function renameChapter(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  item: ChapterTreeItem
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const title = await vscode.window.showInputBox({
+    prompt: "章節標題",
+    value: item.chapter.title,
+    validateInput: (value) => (value.trim() ? undefined : "請輸入章節標題")
+  });
+  if (!title) {
+    return;
+  }
+
+  await store.renameChapter(item.workId, item.chapter.id, title.trim());
+  treeProvider.refresh();
 }
 
 export async function importChapterFile(

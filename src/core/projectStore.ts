@@ -95,6 +95,19 @@ export class ProjectStore {
     return chapter;
   }
 
+  // 只改顯示用標題；章節 id 與檔案路徑維持不變，註解和已開啟的比對分頁才不會失去對應。
+  async renameChapter(workId: string, chapterId: string, title: string): Promise<ChapterConfig> {
+    const config = await this.load();
+    const work = this.findWork(config, workId);
+    const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
+    if (!chapter) {
+      throw new Error(`找不到章節：${chapterId}`);
+    }
+    chapter.title = title;
+    await this.save(config);
+    return chapter;
+  }
+
   async addGlossaryEntry(
     workId: string,
     input: { term: string; translation: string; category?: string; note?: string }
