@@ -5,9 +5,11 @@ import { ProjectStore } from "../core/projectStore";
 import { CommentStore } from "./commentStore";
 import { CommentThreadData } from "../core/types";
 import { safeRun } from "../core/safeRun";
+import { describeTextChange, shiftLineRange } from "./commentRangeTracking";
 
 const CONTROLLER_ID = "novelTranslate.notes";
 const CONTROLLER_LABEL = "小說翻譯筆記";
+const RANGE_PERSIST_DEBOUNCE_MS = 300;
 
 interface NovelComment extends vscode.Comment {
   id: string;
@@ -37,6 +39,8 @@ export class NovelCommentController implements vscode.Disposable {
   private readonly materializedUris = new Set<string>();
   /** 已刪除但尚未成功寫回檔案的討論串 id；寫入失敗時保留，下次儲存再重試。 */
   private readonly pendingDeletes = new Map<string, Set<string>>();
+  /** 討論串範圍因文字變更而移動後，debounce 寫回檔案用的計時器（key 為 `${workId}/${chapterId}`）。 */
+  private readonly rangePersistTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(private readonly store: ProjectStore | undefined) {
@@ -51,7 +55,9 @@ export class NovelCommentController implements vscode.Disposable {
       vscode.workspace.onDidOpenTextDocument((document) =>
         safeRun(this.materialize(document), "載入分頁註解")
       ),
-      vscode.workspace.onDidCloseTextDocument((document) => this.dematerialize(document))
+      vscode.workspace.onDidCloseTextDocument((document) => this.dematerialize(document)),
+      // 討論串依行號定位，增刪上方的行會讓它指到錯誤段落（B7），這裡依文字變更調整範圍。
+      vscode.workspace.onDidChangeTextDocument((event) => this.handleDocumentChange(event))
     );
 
     for (const document of vscode.workspace.textDocuments) {
@@ -63,6 +69,53 @@ export class NovelCommentController implements vscode.Disposable {
     for (const subscription of this.subscriptions) {
       subscription.dispose();
     }
+    for (const timer of this.rangePersistTimers.values()) {
+      clearTimeout(timer);
+    }
+  }
+
+  // 文字變更後，把目前這份文件上每個討論串的範圍依變更內容重新計算；只有真的移動的討論串
+  // 才需要 debounce 寫回檔案，單純在範圍以外打字（絕大多數情況）不會觸發任何寫入。
+  private handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
+    if (event.contentChanges.length === 0) {
+      return;
+    }
+    const key = event.document.uri.toString();
+    const maxLine = Math.max(event.document.lineCount - 1, 0);
+    const affectedChapterKeys = new Set<string>();
+
+    for (const [thread, meta] of this.threadMeta) {
+      if (thread.uri.toString() !== key || !thread.range) {
+        continue;
+      }
+      let range = { startLine: thread.range.start.line, endLine: thread.range.end.line };
+      for (const change of event.contentChanges) {
+        range = shiftLineRange(range, describeTextChange(change.range.start.line, change.range.end.line, change.text));
+      }
+      const startLine = Math.min(range.startLine, maxLine);
+      const endLine = Math.min(range.endLine, maxLine);
+      if (startLine !== thread.range.start.line || endLine !== thread.range.end.line) {
+        thread.range = new vscode.Range(startLine, 0, endLine, 0);
+        affectedChapterKeys.add(`${meta.workId}/${meta.chapterId}`);
+      }
+    }
+
+    for (const chapterKey of affectedChapterKeys) {
+      this.scheduleRangePersist(chapterKey);
+    }
+  }
+
+  private scheduleRangePersist(chapterKey: string): void {
+    const existing = this.rangePersistTimers.get(chapterKey);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    const [workId, chapterId] = chapterKey.split("/");
+    const timer = setTimeout(() => {
+      this.rangePersistTimers.delete(chapterKey);
+      safeRun(this.persistChapter(workId, chapterId), "儲存討論串位置");
+    }, RANGE_PERSIST_DEBOUNCE_MS);
+    this.rangePersistTimers.set(chapterKey, timer);
   }
 
   async submitComment(reply: vscode.CommentReply): Promise<void> {
