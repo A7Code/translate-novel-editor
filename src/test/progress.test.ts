@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   computeChapterProgress,
   findFirstIncompleteChapter,
+  findLineAlignmentIssues,
   findNextUntranslatedLine,
   summarizeWorkProgress
 } from "../translation/progress";
@@ -84,6 +85,35 @@ test("只剩目前這行未翻時停在原地，全部翻完時回傳 undefined"
   assert.equal(findNextUntranslatedLine("一\n二", "A", 1), 1);
   assert.equal(findNextUntranslatedLine("一\n二", "A\nB", 0), undefined);
   assert.equal(findNextUntranslatedLine("", "", -1), undefined);
+});
+
+test("翻譯中途（空白只留在結尾）不觸發行數對齊提示", () => {
+  const issues = findLineAlignmentIssues("一\n二\n三", "A\nB");
+  assert.deepEqual(issues, []);
+});
+
+test("譯文比原文多行時提示從多出的那一行開始可能錯位", () => {
+  const issues = findLineAlignmentIssues("一\n二", "A\nB\nC");
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].kind, "lineCountMismatch");
+  assert.equal(issues[0].line, 2);
+});
+
+test("譯文比原文少行（翻譯中途的正常狀態）不觸發行數不一致提示", () => {
+  const issues = findLineAlignmentIssues("一\n二\n三\n四", "A");
+  assert.equal(issues.filter((issue) => issue.kind === "lineCountMismatch").length, 0);
+});
+
+test("某行譯文空白但後面已有譯文時，視為漏翻或對應錯位", () => {
+  const issues = findLineAlignmentIssues("一\n二\n三", "A\n\nC");
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].kind, "missingTranslation");
+  assert.equal(issues[0].line, 1);
+});
+
+test("無原文內容的章節不檢查行數對齊", () => {
+  const issues = findLineAlignmentIssues("\n　\n", "多出很多\n行的譯文\n內容");
+  assert.deepEqual(issues, []);
 });
 
 test("繼續翻譯會略過已完成與無原文的章節", () => {
