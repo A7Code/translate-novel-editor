@@ -353,6 +353,13 @@
           "group": "inline"
         }
       ],
+      "editor/context": [
+        {
+          "command": "novelTranslate.addGlossaryEntry",
+          "when": "resourceLangId == novel-translation",
+          "group": "1_modification"
+        }
+      ],
       "comments/commentThread/context": [
         {
           "command": "novelTranslate.submitComment",
@@ -384,6 +391,12 @@
         "command": "novelTranslate.suggestPunctuationFromOriginal",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p",
+        "when": "editorTextFocus && resourceLangId == novel-translation"
+      },
+      {
+        "command": "novelTranslate.addGlossaryEntry",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
         "when": "editorTextFocus && resourceLangId == novel-translation"
       }
     ],
