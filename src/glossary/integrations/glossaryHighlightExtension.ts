@@ -2,9 +2,8 @@ import * as vscode from "vscode";
 import { ProjectStore } from "../../core/projectStore";
 import { safeRun } from "../../core/safeRun";
 import { TRANSLATION_LANGUAGE_ID } from "../../core/constants";
-import { WorkConfig } from "../../core/types";
 import { findGlossaryTermMatches } from "../glossaryHighlight";
-import { categoryOf, isCategoryEnabled, isWorkGlossaryAutocompleteEnabled } from "../glossaryCategories";
+import { enabledGlossaryEntries } from "../glossaryCategories";
 
 // 控制是否在原文中把已收錄的詞彙表詞條加底線的設定鍵，預設開啟。
 export const GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY = "novelTranslate.glossaryHighlight.enabled";
@@ -13,13 +12,6 @@ export const GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY = "novelTranslate.glossaryHi
 const DECORATION_TYPE = vscode.window.createTextEditorDecorationType({
   textDecoration: "underline"
 });
-
-function enabledGlossaryOf(work: WorkConfig) {
-  if (!isWorkGlossaryAutocompleteEnabled(work)) {
-    return [];
-  }
-  return work.glossary.filter((entry) => isCategoryEnabled(work, categoryOf(entry)));
-}
 
 /**
  * 在原文裡把已收錄的詞彙表詞條加底線（1.5），只標示「原文」那一側——跟
@@ -99,7 +91,7 @@ export class GlossaryHighlightExtension implements vscode.Disposable {
 
     const config = await this.store!.load();
     const work = config.works.find((candidate) => candidate.id === found.workId);
-    const glossary = work ? enabledGlossaryOf(work) : [];
+    const glossary = work ? enabledGlossaryEntries(work) : [];
     if (glossary.length === 0) {
       editor.setDecorations(DECORATION_TYPE, []);
       return;

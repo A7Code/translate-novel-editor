@@ -18,6 +18,15 @@ export function isWorkGlossaryAutocompleteEnabled(work: WorkConfig): boolean {
   return work.glossaryAutocompleteEnabled !== false;
 }
 
+// 篩選出這個作品目前參與自動完成／標示的詞條：作品總開關關閉時整個作品沒有結果，
+// 否則依各分類的開關過濾。原文詞彙標示（1.5）和譯名一致性檢查（1.7）共用這份邏輯。
+export function enabledGlossaryEntries(work: WorkConfig): GlossaryEntry[] {
+  if (!isWorkGlossaryAutocompleteEnabled(work)) {
+    return [];
+  }
+  return work.glossary.filter((entry) => isCategoryEnabled(work, categoryOf(entry)));
+}
+
 // 跨作品共用的分類名稱清單：以專案層級的 categories 為主，再聯集目前這個作品
 // 已經在用、但可能是舊資料（建立這個欄位之前）還沒被記錄進全域清單的分類，
 // 確保不會漏掉既有詞條的分類。
