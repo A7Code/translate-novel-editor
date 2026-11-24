@@ -32,6 +32,12 @@ import { syncGlossaryAutocompleteLanguageMode, toggleAutocompleteMode } from "./
 import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvider";
 import { GlossaryHoverProvider } from "./glossary/glossaryHoverProvider";
 import { GlossaryHighlightExtension } from "./glossary/integrations/glossaryHighlightExtension";
+import {
+  ConsistencyIssueCodeActionProvider,
+  GlossaryConsistencyDiagnosticsExtension,
+  IGNORE_CONSISTENCY_ISSUE_COMMAND_ID,
+  ignoreConsistencyIssue
+} from "./glossary/integrations/consistencyDiagnosticsExtension";
 import { PunctuationSuggestCompletionProvider } from "./compareView/extensions/punctuationSuggestProvider";
 import {
   configurePunctuationSuggestKeybinding,
@@ -87,6 +93,11 @@ export function activate(context: vscode.ExtensionContext) {
     projectStore,
     glossaryTreeProvider.onDidChangeTreeData
   );
+  const glossaryConsistencyDiagnosticsExtension = new GlossaryConsistencyDiagnosticsExtension(
+    projectStore,
+    compareView,
+    glossaryTreeProvider.onDidChangeTreeData
+  );
   const commentController = new NovelCommentController(projectStore);
   if (projectStore && progressService) {
     context.subscriptions.push(progressService, new ProgressStatusBar(projectStore, compareView, progressService));
@@ -109,6 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
     lineAlignmentDiagnosticsExtension,
     glossaryLanguageModeExtension,
     glossaryHighlightExtension,
+    glossaryConsistencyDiagnosticsExtension,
     commentController,
     settingsTreeProvider,
     workTreeView,
@@ -273,6 +285,21 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerHoverProvider(
       { language: TRANSLATION_LANGUAGE_ID },
       new GlossaryHoverProvider(projectStore)
+    ),
+
+    vscode.languages.registerCodeActionsProvider(
+      { language: TRANSLATION_LANGUAGE_ID },
+      new ConsistencyIssueCodeActionProvider(),
+      ConsistencyIssueCodeActionProvider.metadata
+    ),
+
+    vscode.commands.registerCommand(
+      IGNORE_CONSISTENCY_ISSUE_COMMAND_ID,
+      (uri: vscode.Uri, line: number, entryId: string) =>
+        safeRun(
+          ignoreConsistencyIssue(projectStore, glossaryConsistencyDiagnosticsExtension, uri, line, entryId),
+          "忽略譯名一致性提示"
+        )
     ),
 
     vscode.languages.registerCompletionItemProvider(

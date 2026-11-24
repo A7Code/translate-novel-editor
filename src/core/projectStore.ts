@@ -237,6 +237,29 @@ export class ProjectStore {
     return true;
   }
 
+  // 標記／取消標記一筆譯名一致性檢查提示為「忽略」，供 1.7 的 Problems 面板快速修正使用。
+  // 用 (line, entryId) 當 key，不會因為同一章節其他提示而互相干擾；行號本身不會跟著文字
+  // 移動（跟留言的已知限制 B7 一致），之後增刪該行以上的內容時可能需要重新忽略一次。
+  async setConsistencyIssueIgnored(
+    workId: string,
+    chapterId: string,
+    line: number,
+    entryId: string,
+    ignored: boolean
+  ): Promise<void> {
+    const config = await this.loadForWrite();
+    const work = this.findWork(config, workId);
+    const chapter = work.chapters.find((candidate) => candidate.id === chapterId);
+    if (!chapter) {
+      throw new Error(`找不到章節：${chapterId}`);
+    }
+    const existing = (chapter.ignoredConsistencyIssues ?? []).filter(
+      (key) => !(key.line === line && key.entryId === entryId)
+    );
+    chapter.ignoredConsistencyIssues = ignored ? [...existing, { line, entryId }] : existing;
+    await this.save(config);
+  }
+
   async addGlossaryEntry(
     workId: string,
     input: { term: string; translation: string; category?: string; note?: string }

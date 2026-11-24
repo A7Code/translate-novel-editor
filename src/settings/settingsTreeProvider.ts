@@ -3,6 +3,7 @@ import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/scrol
 import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/cursorSyncExtension";
 import { LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY } from "../compareView/extensions/lineAlignmentDiagnosticsExtension";
 import { GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY } from "../glossary/integrations/glossaryHighlightExtension";
+import { GLOSSARY_CONSISTENCY_CHECK_ENABLED_SETTING_KEY } from "../glossary/integrations/consistencyDiagnosticsExtension";
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
@@ -24,6 +25,7 @@ const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
 const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
 const LINE_ALIGNMENT_CHECK_ITEM_ID = "lineAlignmentCheck.enabled";
 const GLOSSARY_HIGHLIGHT_ITEM_ID = "glossaryHighlight.enabled";
+const GLOSSARY_CONSISTENCY_CHECK_ITEM_ID = "glossaryConsistencyCheck.enabled";
 const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
@@ -45,6 +47,7 @@ const BOOLEAN_SETTING_ITEM_KEYS: Record<string, string> = {
   [LINE_ALIGNMENT_CHECK_ITEM_ID]: LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY,
   [GLOSSARY_AUTOCOMPLETE_ITEM_ID]: GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
   [GLOSSARY_HIGHLIGHT_ITEM_ID]: GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY,
+  [GLOSSARY_CONSISTENCY_CHECK_ITEM_ID]: GLOSSARY_CONSISTENCY_CHECK_ENABLED_SETTING_KEY,
   [TRANSLATION_ON_LEFT_ITEM_ID]: COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
   [PUNCTUATION_SUGGEST_ITEM_ID]: PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
 };
@@ -97,7 +100,12 @@ const GROUP_ITEM_IDS: Record<string, string[]> = {
     CURSOR_SYNC_ITEM_ID,
     LINE_ALIGNMENT_CHECK_ITEM_ID
   ],
-  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID, GLOSSARY_HIGHLIGHT_ITEM_ID],
+  [GLOSSARY_GROUP_ID]: [
+    GLOSSARY_AUTOCOMPLETE_ITEM_ID,
+    GLOSSARY_PHONETIC_MATCH_ITEM_ID,
+    GLOSSARY_HIGHLIGHT_ITEM_ID,
+    GLOSSARY_CONSISTENCY_CHECK_ITEM_ID
+  ],
   [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID],
   [DEFAULT_LANGUAGE_GROUP_ID]: [DEFAULT_SOURCE_LANGUAGE_ITEM_ID, DEFAULT_TARGET_LANGUAGE_ITEM_ID]
 };
@@ -203,6 +211,19 @@ class GlossaryHighlightSettingItem extends vscode.TreeItem {
     super("原文詞彙標示", vscode.TreeItemCollapsibleState.None);
     this.id = GLOSSARY_HIGHLIGHT_ITEM_ID;
     this.tooltip = "是否在原文中把已收錄的詞彙表詞條加底線，並在懸停時顯示譯名、分類與備註。";
+    this.checkboxState = enabled
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
+  }
+}
+
+class GlossaryConsistencyCheckSettingItem extends vscode.TreeItem {
+  constructor(enabled: boolean) {
+    super("譯名一致性檢查", vscode.TreeItemCollapsibleState.None);
+    this.id = GLOSSARY_CONSISTENCY_CHECK_ITEM_ID;
+    this.tooltip =
+      "開啟原文／譯文比對畫面時，是否在 Problems 面板提示「原文出現詞彙表詞條，但這行譯文沒有對應譯名」。可對單筆提示套用「忽略」快速修正。";
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -324,6 +345,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         event.affectsConfiguration(CURSOR_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY) ||
+        event.affectsConfiguration(GLOSSARY_CONSISTENCY_CHECK_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY) ||
         event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY) ||
@@ -497,6 +519,10 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         );
       case GLOSSARY_HIGHLIGHT_ITEM_ID:
         return new GlossaryHighlightSettingItem(config.get<boolean>(GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY, true));
+      case GLOSSARY_CONSISTENCY_CHECK_ITEM_ID:
+        return new GlossaryConsistencyCheckSettingItem(
+          config.get<boolean>(GLOSSARY_CONSISTENCY_CHECK_ENABLED_SETTING_KEY, true)
+        );
       case PUNCTUATION_SUGGEST_ITEM_ID:
         return new PunctuationSuggestSettingItem(config.get<boolean>(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY, true));
       case PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID:

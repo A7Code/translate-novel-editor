@@ -449,6 +449,11 @@
           "default": true,
           "description": "是否在原文中把已收錄的詞彙表詞條加底線，並在懸停時顯示譯名、分類與備註。"
         },
+        "novelTranslate.glossaryConsistencyCheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，是否在 Problems 面板提示「原文出現詞彙表詞條，但這行譯文沒有對應譯名」，可對單筆提示套用「忽略」快速修正。"
+        },
         "novelTranslate.glossaryAutocomplete.enabled": {
           "type": "boolean",
           "default": true,

@@ -7,6 +7,13 @@ export interface ChapterConfig {
   epubContentPath?: string;
   /** EPUB 段落抽取規則版本；未設定的 EPUB 章節視為 1。行號依此版本對應，不可任意更改。 */
   extractVersion?: EpubExtractVersion;
+  /** 使用者標記為「忽略」的譯名一致性檢查提示（1.7），依 (行號, 詞條 id) 記錄。 */
+  ignoredConsistencyIssues?: ConsistencyIssueKey[];
+}
+
+export interface ConsistencyIssueKey {
+  line: number;
+  entryId: string;
 }
 
 export type EpubExtractVersion = 1 | 2;
