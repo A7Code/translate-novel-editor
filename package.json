@@ -209,6 +209,12 @@
         "icon": "$(trash)"
       },
       {
+        "command": "novelTranslate.showCommentOverview",
+        "title": "小說翻譯：註解總覽（待確認）",
+        "category": "小說翻譯",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "novelTranslate.importEpub",
         "title": "小說翻譯：匯入 EPUB",
         "category": "小說翻譯",

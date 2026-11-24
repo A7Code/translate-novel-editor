@@ -23,6 +23,19 @@ interface ThreadMeta {
   relativePath: string;
 }
 
+export interface UnresolvedCommentEntry {
+  workId: string;
+  workTitle: string;
+  chapterId: string;
+  chapterTitle: string;
+  side: "original" | "translation";
+  /** 0-indexed。 */
+  line: number;
+  commentCount: number;
+  /** 最新一則留言內容，供列表預覽，已去除多餘空白。 */
+  preview: string;
+}
+
 function getAuthorName(): string {
   try {
     return os.userInfo().username || "我";
@@ -179,6 +192,37 @@ export class NovelCommentController implements vscode.Disposable {
     if (meta) {
       safeRun(this.persistChapter(meta.workId, meta.chapterId), "儲存註解");
     }
+  }
+
+  /** 列出所有作品、所有章節裡「待確認」的討論串，供 1.9 的註解總覽使用。 */
+  async listUnresolvedComments(): Promise<UnresolvedCommentEntry[]> {
+    if (!this.store) {
+      return [];
+    }
+    const config = await this.store.load();
+    const entries: UnresolvedCommentEntry[] = [];
+    for (const work of config.works) {
+      for (const chapter of work.chapters) {
+        const threads = await this.commentStore.load(work.id, chapter.id);
+        for (const thread of threads) {
+          if (thread.resolved) {
+            continue;
+          }
+          const lastComment = thread.comments[thread.comments.length - 1];
+          entries.push({
+            workId: work.id,
+            workTitle: work.title,
+            chapterId: chapter.id,
+            chapterTitle: chapter.title,
+            side: thread.relativePath === chapter.originalPath ? "original" : "translation",
+            line: thread.startLine,
+            commentCount: thread.comments.length,
+            preview: (lastComment?.body ?? "").replace(/\s+/g, " ").trim()
+          });
+        }
+      }
+    }
+    return entries;
   }
 
   private async provideCommentingRanges(document: vscode.TextDocument): Promise<vscode.Range[] | undefined> {

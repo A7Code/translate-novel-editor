@@ -44,7 +44,7 @@ import {
   suggestPunctuationFromOriginal
 } from "./compareView/punctuationSuggestCommands";
 import { NovelCommentController } from "./comments/novelCommentController";
-import { deleteCommentThread, submitComment, toggleCommentResolved } from "./comments/commentCommands";
+import { deleteCommentThread, showCommentOverview, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
 import { upgradeEpubChapters } from "./epub/epubMigrationCommands";
 import {
@@ -325,6 +325,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.deleteCommentThread", (thread: vscode.CommentThread) =>
       deleteCommentThread(commentController, thread)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.showCommentOverview", () =>
+      safeRun(showCommentOverview(projectStore, commentController, compareView), "開啟註解總覽")
     ),
 
     vscode.commands.registerCommand("novelTranslate.importEpub", () => importEpub(projectStore, workTreeProvider)),
