@@ -55,6 +55,7 @@ import {
 import { NovelCommentController } from "./comments/novelCommentController";
 import { deleteCommentThread, showCommentOverview, submitComment, toggleCommentResolved } from "./comments/commentCommands";
 import { exportEpub, importEpub } from "./epub/epubCommands";
+import { exportPlainText } from "./export/plainTextExportCommands";
 import { upgradeEpubChapters } from "./epub/epubMigrationCommands";
 import {
   notifyProjectLoadFailure,
@@ -352,6 +353,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.exportEpub", (item?: WorkTreeItem) =>
       exportEpub(projectStore, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.exportPlainText", (item?: WorkTreeItem) =>
+      safeRun(exportPlainText(projectStore, item), "匯出純文字")
     ),
 
     vscode.commands.registerCommand("novelTranslate.upgradeEpubChapters", (item?: WorkTreeItem) =>

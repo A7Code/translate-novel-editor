@@ -239,6 +239,12 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "novelTranslate.exportPlainText",
+        "title": "小說翻譯：匯出為純文字",
+        "category": "小說翻譯",
+        "icon": "$(file-text)"
+      },
+      {
         "command": "novelTranslate.upgradeEpubChapters",
         "title": "小說翻譯：升級 EPUB 章節",
         "category": "小說翻譯"
@@ -352,6 +358,10 @@
         },
         {
           "command": "novelTranslate.importChapterFile",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/"
+        },
+        {
+          "command": "novelTranslate.exportPlainText",
           "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/"
         },
         {
