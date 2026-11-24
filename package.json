@@ -433,6 +433,11 @@
           "default": true,
           "description": "開啟原文／譯文比對畫面時，是否在 Problems 面板提示可能造成整章錯位的行數問題：譯文比原文多行，或某行譯文空白但後面已經有譯文。"
         },
+        "novelTranslate.glossaryHighlight.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否在原文中把已收錄的詞彙表詞條加底線，並在懸停時顯示譯名、分類與備註。"
+        },
         "novelTranslate.glossaryAutocomplete.enabled": {
           "type": "boolean",
           "default": true,

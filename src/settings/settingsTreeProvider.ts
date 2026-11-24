@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/scrollSyncExtension";
 import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/cursorSyncExtension";
 import { LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY } from "../compareView/extensions/lineAlignmentDiagnosticsExtension";
+import { GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY } from "../glossary/integrations/glossaryHighlightExtension";
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
@@ -22,6 +23,7 @@ import {
 const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
 const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
 const LINE_ALIGNMENT_CHECK_ITEM_ID = "lineAlignmentCheck.enabled";
+const GLOSSARY_HIGHLIGHT_ITEM_ID = "glossaryHighlight.enabled";
 const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
@@ -34,6 +36,18 @@ const DEFAULT_TARGET_LANGUAGE_ITEM_ID = "defaultLanguage.target";
 export const TOGGLE_CHECKBOX_COMMAND_ID = "novelTranslate.settingsTree.toggleCheckbox";
 // 點擊預設語言項目時開啟輸入框；只供樹狀項目內部呼叫，不列入命令面板。
 export const EDIT_DEFAULT_LANGUAGE_COMMAND_ID = "novelTranslate.settingsTree.editDefaultLanguage";
+
+// 單純「核取方塊 ↔ 布林設定鍵」一對一對應的項目，統一在這裡查表切換；
+// GLOSSARY_PHONETIC_MATCH_ITEM_ID 不在這裡，因為它對應的設定值不是布林（"phonetic"/"exact"）。
+const BOOLEAN_SETTING_ITEM_KEYS: Record<string, string> = {
+  [SCROLL_SYNC_ITEM_ID]: SCROLL_SYNC_ENABLED_SETTING_KEY,
+  [CURSOR_SYNC_ITEM_ID]: CURSOR_SYNC_ENABLED_SETTING_KEY,
+  [LINE_ALIGNMENT_CHECK_ITEM_ID]: LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY,
+  [GLOSSARY_AUTOCOMPLETE_ITEM_ID]: GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY,
+  [GLOSSARY_HIGHLIGHT_ITEM_ID]: GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY,
+  [TRANSLATION_ON_LEFT_ITEM_ID]: COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY,
+  [PUNCTUATION_SUGGEST_ITEM_ID]: PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
+};
 
 const DEFAULT_LANGUAGE_FIELDS: Record<string, { label: string; settingKey: string; example: string }> = {
   [DEFAULT_SOURCE_LANGUAGE_ITEM_ID]: {
@@ -83,7 +97,7 @@ const GROUP_ITEM_IDS: Record<string, string[]> = {
     CURSOR_SYNC_ITEM_ID,
     LINE_ALIGNMENT_CHECK_ITEM_ID
   ],
-  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
+  [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID, GLOSSARY_HIGHLIGHT_ITEM_ID],
   [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID],
   [DEFAULT_LANGUAGE_GROUP_ID]: [DEFAULT_SOURCE_LANGUAGE_ITEM_ID, DEFAULT_TARGET_LANGUAGE_ITEM_ID]
 };
@@ -177,6 +191,18 @@ class GlossaryPhoneticMatchSettingItem extends vscode.TreeItem {
     this.id = GLOSSARY_PHONETIC_MATCH_ITEM_ID;
     this.tooltip =
       "開啟後，自動完成除了比對完全相同的文字，游標前一個字只要跟詞條首字同音（含聲調）也會推薦，方便修正注音輸入法選錯的同音錯字（例如打「路」也能推薦「露西亞」）。關閉則只比對完全相同的文字。";
+    this.checkboxState = enabled
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
+  }
+}
+
+class GlossaryHighlightSettingItem extends vscode.TreeItem {
+  constructor(enabled: boolean) {
+    super("原文詞彙標示", vscode.TreeItemCollapsibleState.None);
+    this.id = GLOSSARY_HIGHLIGHT_ITEM_ID;
+    this.tooltip = "是否在原文中把已收錄的詞彙表詞條加底線，並在懸停時顯示譯名、分類與備註。";
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -297,6 +323,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(CURSOR_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY) ||
+        event.affectsConfiguration(GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY) ||
         event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY) ||
@@ -468,6 +495,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         return new GlossaryPhoneticMatchSettingItem(
           config.get<string>(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY, "exact") === "phonetic"
         );
+      case GLOSSARY_HIGHLIGHT_ITEM_ID:
+        return new GlossaryHighlightSettingItem(config.get<boolean>(GLOSSARY_HIGHLIGHT_ENABLED_SETTING_KEY, true));
       case PUNCTUATION_SUGGEST_ITEM_ID:
         return new PunctuationSuggestSettingItem(config.get<boolean>(PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY, true));
       case PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID:
@@ -510,20 +539,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
       return;
     }
 
-    const settingKey =
-      item.id === SCROLL_SYNC_ITEM_ID
-        ? SCROLL_SYNC_ENABLED_SETTING_KEY
-        : item.id === CURSOR_SYNC_ITEM_ID
-          ? CURSOR_SYNC_ENABLED_SETTING_KEY
-          : item.id === LINE_ALIGNMENT_CHECK_ITEM_ID
-            ? LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY
-            : item.id === GLOSSARY_AUTOCOMPLETE_ITEM_ID
-            ? GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY
-            : item.id === TRANSLATION_ON_LEFT_ITEM_ID
-              ? COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY
-              : item.id === PUNCTUATION_SUGGEST_ITEM_ID
-                ? PUNCTUATION_SUGGEST_ENABLED_SETTING_KEY
-                : undefined;
+    const settingKey = BOOLEAN_SETTING_ITEM_KEYS[item.id ?? ""];
     if (!settingKey) {
       return;
     }

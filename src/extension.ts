@@ -30,6 +30,8 @@ import {
 } from "./glossary/glossaryCommands";
 import { syncGlossaryAutocompleteLanguageMode, toggleAutocompleteMode } from "./glossary/languageModeCommands";
 import { GlossaryCompletionProvider } from "./glossary/glossaryCompletionProvider";
+import { GlossaryHoverProvider } from "./glossary/glossaryHoverProvider";
+import { GlossaryHighlightExtension } from "./glossary/integrations/glossaryHighlightExtension";
 import { PunctuationSuggestCompletionProvider } from "./compareView/extensions/punctuationSuggestProvider";
 import {
   configurePunctuationSuggestKeybinding,
@@ -80,6 +82,10 @@ export function activate(context: vscode.ExtensionContext) {
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
   const lineAlignmentDiagnosticsExtension = new LineAlignmentDiagnosticsExtension(compareView);
   const glossaryLanguageModeExtension = new GlossaryLanguageModeExtension(compareView);
+  const glossaryHighlightExtension = new GlossaryHighlightExtension(
+    projectStore,
+    glossaryTreeProvider.onDidChangeTreeData
+  );
   const commentController = new NovelCommentController(projectStore);
   if (projectStore && progressService) {
     context.subscriptions.push(progressService, new ProgressStatusBar(projectStore, compareView, progressService));
@@ -101,6 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
     scrollSyncExtension,
     lineAlignmentDiagnosticsExtension,
     glossaryLanguageModeExtension,
+    glossaryHighlightExtension,
     commentController,
     settingsTreeProvider,
     workTreeView,
@@ -256,6 +263,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerCompletionItemProvider(
       { language: TRANSLATION_LANGUAGE_ID },
       new GlossaryCompletionProvider(projectStore)
+    ),
+
+    vscode.languages.registerHoverProvider(
+      { language: TRANSLATION_LANGUAGE_ID },
+      new GlossaryHoverProvider(projectStore)
     ),
 
     vscode.languages.registerCompletionItemProvider(
