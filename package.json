@@ -415,6 +415,11 @@
           "default": true,
           "description": "開啟原文／譯文比對畫面時，是否把焦點編輯器的游標行同步到另一側編輯器。"
         },
+        "novelTranslate.lineAlignmentCheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "開啟原文／譯文比對畫面時，是否在 Problems 面板提示可能造成整章錯位的行數問題：譯文比原文多行，或某行譯文空白但後面已經有譯文。"
+        },
         "novelTranslate.glossaryAutocomplete.enabled": {
           "type": "boolean",
           "default": true,

@@ -17,6 +17,7 @@ import { ProjectStore } from "./core/projectStore";
 import { CompareView } from "./compareView/compareView";
 import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtension";
 import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtension";
+import { LineAlignmentDiagnosticsExtension } from "./compareView/extensions/lineAlignmentDiagnosticsExtension";
 import { GlossaryLanguageModeExtension } from "./glossary/integrations/compareViewLanguageMode";
 import { addChapter, createWork, editWork, importChapterFile, moveTreeItem, renameChapter } from "./work/workCommands";
 import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./compareView/compareCommands";
@@ -77,6 +78,7 @@ export function activate(context: vscode.ExtensionContext) {
   const compareView = new CompareView();
   const cursorSyncExtension = new CursorSyncExtension(compareView);
   const scrollSyncExtension = new ScrollSyncExtension(compareView);
+  const lineAlignmentDiagnosticsExtension = new LineAlignmentDiagnosticsExtension(compareView);
   const glossaryLanguageModeExtension = new GlossaryLanguageModeExtension(compareView);
   const commentController = new NovelCommentController(projectStore);
   if (projectStore && progressService) {
@@ -97,6 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
     compareView,
     cursorSyncExtension,
     scrollSyncExtension,
+    lineAlignmentDiagnosticsExtension,
     glossaryLanguageModeExtension,
     commentController,
     settingsTreeProvider,

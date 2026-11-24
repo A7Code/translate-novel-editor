@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { SCROLL_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/scrollSyncExtension";
 import { CURSOR_SYNC_ENABLED_SETTING_KEY } from "../compareView/extensions/cursorSyncExtension";
+import { LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY } from "../compareView/extensions/lineAlignmentDiagnosticsExtension";
 import { SidebarSectionStateStore } from "../core/sidebarStateStore";
 import { ProjectStore } from "../core/projectStore";
 import { WorkConfig } from "../core/types";
@@ -20,6 +21,7 @@ import {
 
 const SCROLL_SYNC_ITEM_ID = "compareScrollSync.enabled";
 const CURSOR_SYNC_ITEM_ID = "compareCursorSync.enabled";
+const LINE_ALIGNMENT_CHECK_ITEM_ID = "lineAlignmentCheck.enabled";
 const GLOSSARY_AUTOCOMPLETE_ITEM_ID = "glossaryAutocomplete.enabled";
 const TRANSLATION_ON_LEFT_ITEM_ID = "compareView.translationOnLeft";
 const GLOSSARY_PHONETIC_MATCH_ITEM_ID = "glossaryAutocomplete.matchMode.phonetic";
@@ -75,7 +77,12 @@ const SUBGROUP_CHILDREN: Record<string, string[]> = {
 
 // 各群組底下有哪些設定項目 id，用於 getParent() 往上找父節點。
 const GROUP_ITEM_IDS: Record<string, string[]> = {
-  [COMPARE_VIEW_GROUP_ID]: [TRANSLATION_ON_LEFT_ITEM_ID, SCROLL_SYNC_ITEM_ID, CURSOR_SYNC_ITEM_ID],
+  [COMPARE_VIEW_GROUP_ID]: [
+    TRANSLATION_ON_LEFT_ITEM_ID,
+    SCROLL_SYNC_ITEM_ID,
+    CURSOR_SYNC_ITEM_ID,
+    LINE_ALIGNMENT_CHECK_ITEM_ID
+  ],
   [GLOSSARY_GROUP_ID]: [GLOSSARY_AUTOCOMPLETE_ITEM_ID, GLOSSARY_PHONETIC_MATCH_ITEM_ID],
   [PUNCTUATION_SUBGROUP_ID]: [PUNCTUATION_SUGGEST_ITEM_ID, PUNCTUATION_SUGGEST_CONFIGURE_KEYBINDING_ITEM_ID],
   [DEFAULT_LANGUAGE_GROUP_ID]: [DEFAULT_SOURCE_LANGUAGE_ITEM_ID, DEFAULT_TARGET_LANGUAGE_ITEM_ID]
@@ -132,6 +139,19 @@ class CursorSyncSettingItem extends vscode.TreeItem {
     super("同步游標行", vscode.TreeItemCollapsibleState.None);
     this.id = CURSOR_SYNC_ITEM_ID;
     this.tooltip = "開啟原文／譯文比對畫面時，是否把焦點編輯器的游標行同步到另一側編輯器（借用其原生的目前行樣式呈現對應位置）。";
+    this.checkboxState = enabled
+      ? vscode.TreeItemCheckboxState.Checked
+      : vscode.TreeItemCheckboxState.Unchecked;
+    this.command = { command: TOGGLE_CHECKBOX_COMMAND_ID, title: "切換", arguments: [this] };
+  }
+}
+
+class LineAlignmentCheckSettingItem extends vscode.TreeItem {
+  constructor(enabled: boolean) {
+    super("行數對齊檢查", vscode.TreeItemCollapsibleState.None);
+    this.id = LINE_ALIGNMENT_CHECK_ITEM_ID;
+    this.tooltip =
+      "開啟原文／譯文比對畫面時，是否在 Problems 面板提示可能造成整章錯位的行數問題：譯文比原文多行，或某行譯文空白但後面已經有譯文。";
     this.checkboxState = enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -276,6 +296,7 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
       if (
         event.affectsConfiguration(SCROLL_SYNC_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(CURSOR_SYNC_ENABLED_SETTING_KEY) ||
+        event.affectsConfiguration(LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY) ||
         event.affectsConfiguration(GLOSSARY_AUTOCOMPLETE_MATCH_MODE_SETTING_KEY) ||
         event.affectsConfiguration(COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY) ||
@@ -437,6 +458,8 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         return new ScrollSyncSettingItem(config.get<boolean>(SCROLL_SYNC_ENABLED_SETTING_KEY, true));
       case CURSOR_SYNC_ITEM_ID:
         return new CursorSyncSettingItem(config.get<boolean>(CURSOR_SYNC_ENABLED_SETTING_KEY, true));
+      case LINE_ALIGNMENT_CHECK_ITEM_ID:
+        return new LineAlignmentCheckSettingItem(config.get<boolean>(LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY, true));
       case GLOSSARY_AUTOCOMPLETE_ITEM_ID:
         return new GlossaryAutocompleteSettingItem(
           config.get<boolean>(GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY, true)
@@ -492,7 +515,9 @@ export class SettingsTreeProvider implements vscode.TreeDataProvider<vscode.Tree
         ? SCROLL_SYNC_ENABLED_SETTING_KEY
         : item.id === CURSOR_SYNC_ITEM_ID
           ? CURSOR_SYNC_ENABLED_SETTING_KEY
-          : item.id === GLOSSARY_AUTOCOMPLETE_ITEM_ID
+          : item.id === LINE_ALIGNMENT_CHECK_ITEM_ID
+            ? LINE_ALIGNMENT_CHECK_ENABLED_SETTING_KEY
+            : item.id === GLOSSARY_AUTOCOMPLETE_ITEM_ID
             ? GLOSSARY_AUTOCOMPLETE_ENABLED_SETTING_KEY
             : item.id === TRANSLATION_ON_LEFT_ITEM_ID
               ? COMPARE_TRANSLATION_ON_LEFT_SETTING_KEY
