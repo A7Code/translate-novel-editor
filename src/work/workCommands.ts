@@ -232,6 +232,88 @@ export async function importChapterFile(
   await openCompareView(store, compareView, chapter);
 }
 
+// 刪除前先關掉這個章節／作品目前開著的分頁，避免刪除後分頁還指著一個已經被搬到 trash 的檔案。
+async function closeOpenEditorsFor(uris: readonly vscode.Uri[]): Promise<void> {
+  const targets = new Set(uris.map((uri) => uri.toString()));
+  const tabs = vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter((tab) => tab.input instanceof vscode.TabInputText && targets.has(tab.input.uri.toString()));
+  if (tabs.length > 0) {
+    await vscode.window.tabGroups.close(tabs);
+  }
+}
+
+export async function deleteChapter(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  item: ChapterTreeItem
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    `確定要刪除章節「${item.chapter.title}」嗎？原文、譯文與翻譯筆記會移到 .novel-translate/trash/ 底下，不是立即永久刪除，但需要手動從那裡找回。`,
+    { modal: true },
+    "刪除"
+  );
+  if (confirmed !== "刪除") {
+    return;
+  }
+
+  await closeOpenEditorsFor([
+    store.resolveUri(item.chapter.originalPath),
+    store.resolveUri(item.chapter.translationPath)
+  ]);
+  await store.deleteChapter(item.workId, item.chapter.id);
+  treeProvider.refresh();
+  vscode.window.showInformationMessage(`已刪除章節「${item.chapter.title}」，檔案已移到 .novel-translate/trash/。`);
+}
+
+// 作品的刪除範圍比章節大得多（所有章節、詞彙表、翻譯筆記），除了警告對話框，
+// 還要求輸入完全相同的作品名稱才會真正刪除，降低手滑誤刪整部作品的風險。
+export async function deleteWork(
+  store: ProjectStore | undefined,
+  treeProvider: WorkTreeProvider,
+  glossaryTreeProvider: GlossaryTreeProvider,
+  item: WorkTreeItem
+): Promise<void> {
+  if (!store) {
+    vscode.window.showErrorMessage("請先開啟一個工作區資料夾。");
+    return;
+  }
+
+  const confirmed = await vscode.window.showWarningMessage(
+    `確定要刪除作品「${item.work.title}」嗎？這會刪除底下所有 ${item.work.chapters.length} 個章節、詞彙表與翻譯筆記。檔案會移到 .novel-translate/trash/ 底下，不是立即永久刪除。`,
+    { modal: true },
+    "刪除"
+  );
+  if (confirmed !== "刪除") {
+    return;
+  }
+
+  const typed = await vscode.window.showInputBox({
+    prompt: `再次確認：輸入作品名稱「${item.work.title}」以刪除`,
+    placeHolder: item.work.title,
+    validateInput: (value) => (value === item.work.title ? undefined : "請輸入完全相同的作品名稱")
+  });
+  if (typed !== item.work.title) {
+    return;
+  }
+
+  await closeOpenEditorsFor(
+    item.work.chapters.flatMap((chapter) => [
+      store.resolveUri(chapter.originalPath),
+      store.resolveUri(chapter.translationPath)
+    ])
+  );
+  await store.deleteWork(item.work.id);
+  treeProvider.refresh();
+  glossaryTreeProvider.refresh();
+  vscode.window.showInformationMessage(`已刪除作品「${item.work.title}」，檔案已移到 .novel-translate/trash/。`);
+}
+
 async function resolveWorkId(store: ProjectStore, item?: WorkTreeItem): Promise<string | undefined> {
   if (item) {
     return item.work.id;

@@ -97,6 +97,18 @@
         "icon": "$(edit)"
       },
       {
+        "command": "novelTranslate.deleteChapter",
+        "title": "小說翻譯：刪除章節",
+        "category": "小說翻譯",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "novelTranslate.deleteWork",
+        "title": "小說翻譯：刪除作品",
+        "category": "小說翻譯",
+        "icon": "$(trash)"
+      },
+      {
         "command": "novelTranslate.moveItemUp",
         "title": "上移",
         "category": "小說翻譯",
@@ -292,6 +304,14 @@
         {
           "command": "novelTranslate.moveItemDown",
           "when": "false"
+        },
+        {
+          "command": "novelTranslate.deleteChapter",
+          "when": "false"
+        },
+        {
+          "command": "novelTranslate.deleteWork",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -309,6 +329,16 @@
           "command": "novelTranslate.renameChapter",
           "when": "view == novelTranslate.works && viewItem == novelTranslateChapter",
           "group": "1_modification"
+        },
+        {
+          "command": "novelTranslate.deleteChapter",
+          "when": "view == novelTranslate.works && viewItem == novelTranslateChapter",
+          "group": "9_delete"
+        },
+        {
+          "command": "novelTranslate.deleteWork",
+          "when": "view == novelTranslate.works && viewItem =~ /^novelTranslateWork/",
+          "group": "9_delete"
         },
         {
           "command": "novelTranslate.moveItemUp",

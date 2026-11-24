@@ -19,7 +19,16 @@ import { CursorSyncExtension } from "./compareView/extensions/cursorSyncExtensio
 import { ScrollSyncExtension } from "./compareView/extensions/scrollSyncExtension";
 import { LineAlignmentDiagnosticsExtension } from "./compareView/extensions/lineAlignmentDiagnosticsExtension";
 import { GlossaryLanguageModeExtension } from "./glossary/integrations/compareViewLanguageMode";
-import { addChapter, createWork, editWork, importChapterFile, moveTreeItem, renameChapter } from "./work/workCommands";
+import {
+  addChapter,
+  createWork,
+  deleteChapter,
+  deleteWork,
+  editWork,
+  importChapterFile,
+  moveTreeItem,
+  renameChapter
+} from "./work/workCommands";
 import { openCompareView, restoreComparePairIfOpen, toggleCompareLayout } from "./compareView/compareCommands";
 import {
   addGlossaryCategory,
@@ -205,6 +214,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.renameChapter", (item: ChapterTreeItem) =>
       renameChapter(projectStore, workTreeProvider, item)
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.deleteChapter", (item: ChapterTreeItem) =>
+      safeRun(deleteChapter(projectStore, workTreeProvider, item), "刪除章節")
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.deleteWork", (item: WorkTreeItem) =>
+      safeRun(deleteWork(projectStore, workTreeProvider, glossaryTreeProvider, item), "刪除作品")
     ),
 
     vscode.commands.registerCommand("novelTranslate.moveItemUp", (item: WorkTreeItem | ChapterTreeItem) =>

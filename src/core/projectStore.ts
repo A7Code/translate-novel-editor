@@ -10,6 +10,13 @@ const PROJECT_CONFIG_RELATIVE_PATH = ".novel-translate/project.json";
 export const BACKUP_DIR = ".novel-translate/backups";
 const PROJECT_BACKUP_PREFIX = "project";
 const PROJECT_BACKUP_KEEP = 10;
+// 刪除章節／作品（1.10）不會立即永久刪除，先把相關檔案搬到這裡，使用者需要的話可以手動救回。
+const TRASH_DIR = ".novel-translate/trash";
+// 留言檔的路徑跟 commentStore.ts 的 commentFilePath() 算法必須一致；這裡不直接 import 那個函式，
+// 避免 core/ 反過來依賴 comments/（comments/ 已經依賴 ProjectStore，import 回去會形成循環依賴）。
+function commentFilePathFor(workId: string, chapterId: string): string {
+  return `.novel-translate/comments/${workId}/${chapterId}.json`;
+}
 
 function isProjectConfig(value: unknown): value is ProjectConfig {
   return typeof value === "object" && value !== null && Array.isArray((value as ProjectConfig).works);
@@ -181,8 +188,10 @@ export class ProjectStore {
     const config = await this.loadForWrite();
     const work = this.findWork(config, workId);
 
-    const index = work.chapters.length + 1;
-    const chapterId = `ch${String(index).padStart(2, "0")}`;
+    // 用隨機 id（而不是依目前章節數推算的序號）產生，刪除章節後再新增不會撞到被移到
+    // trash 底下、但 id 仍被註解等資料引用的舊章節（1.10）。顯示順序不受影響，
+    // 因為章節編號是依 work.chapters 陣列順序顯示，跟 id 本身的格式無關。
+    const chapterId = `ch-${randomUUID().slice(0, 8)}`;
     const originalPath = `originals/${work.id}/${chapterId}.txt`;
     const translationPath = `translations/${work.id}/${chapterId}.txt`;
 
@@ -258,6 +267,62 @@ export class ProjectStore {
     );
     chapter.ignoredConsistencyIssues = ignored ? [...existing, { line, entryId }] : existing;
     await this.save(config);
+  }
+
+  // 刪除章節：先把原文、譯文與翻譯筆記搬到 trash，成功後才把章節從設定中移除並存檔
+  // （跟 addChapter 「先寫檔案、再存設定」是同一種順序，確保設定不會指到不存在的檔案）。
+  async deleteChapter(workId: string, chapterId: string): Promise<void> {
+    const config = await this.loadForWrite();
+    const work = this.findWork(config, workId);
+    const index = work.chapters.findIndex((candidate) => candidate.id === chapterId);
+    if (index < 0) {
+      throw new Error(`找不到章節：${chapterId}`);
+    }
+    const chapter = work.chapters[index];
+
+    await this.moveToTrash(chapterId, [
+      chapter.originalPath,
+      chapter.translationPath,
+      commentFilePathFor(workId, chapterId)
+    ]);
+    work.chapters.splice(index, 1);
+    await this.save(config);
+  }
+
+  // 刪除作品：連同底下所有章節的原文、譯文、翻譯筆記，以及 EPUB 來源（如果有）一併搬到 trash。
+  async deleteWork(workId: string): Promise<void> {
+    const config = await this.loadForWrite();
+    const index = config.works.findIndex((candidate) => candidate.id === workId);
+    if (index < 0) {
+      throw new Error(`找不到作品：${workId}`);
+    }
+    const work = config.works[index];
+
+    const relativePaths = [`originals/${work.id}`, `translations/${work.id}`, `.novel-translate/comments/${work.id}`];
+    if (work.epubSource) {
+      relativePaths.push(work.epubSource.packageDir);
+    }
+    await this.moveToTrash(work.id, relativePaths);
+    config.works.splice(index, 1);
+    await this.save(config);
+  }
+
+  // 把檔案或資料夾搬到 .novel-translate/trash/<時間戳記>-<label>/<原本的相對路徑> 底下，
+  // 保留原本的相對路徑結構方便人工比對、救回。本來就不存在的路徑（例如還沒有任何留言）直接略過。
+  private async moveToTrash(label: string, relativePaths: readonly string[]): Promise<void> {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const trashRoot = `${TRASH_DIR}/${stamp}-${label}`;
+    for (const relativePath of relativePaths) {
+      const sourceUri = this.resolveUri(relativePath);
+      try {
+        await vscode.workspace.fs.stat(sourceUri);
+      } catch {
+        continue;
+      }
+      const targetRelativePath = `${trashRoot}/${relativePath}`;
+      await vscode.workspace.fs.createDirectory(this.resolveUri(posixPath.dirname(targetRelativePath)));
+      await vscode.workspace.fs.rename(sourceUri, this.resolveUri(targetRelativePath), { overwrite: false });
+    }
   }
 
   async addGlossaryEntry(
