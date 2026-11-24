@@ -25,6 +25,19 @@ export async function openCompareView(
   await compareView.open(originalUri, translationUri);
 }
 
+// 讓比對畫面兩側的游標都移到指定行的行末並捲動到該行，供全作品搜尋等「點擊結果跳至該行」的情境使用。
+// 呼叫前應先確保 openCompareView() 已完成，否則兩側可能還沒有對應的編輯器。
+export function revealCompareLine(compareView: CompareView, line: number): void {
+  for (const editor of [compareView.editorFor("original"), compareView.editorFor("translation")]) {
+    if (!editor || line >= editor.document.lineCount) {
+      continue;
+    }
+    const position = editor.document.lineAt(line).range.end;
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+}
+
 // VS Code 重新啟動時可能會自動還原上次開啟的分頁，這些分頁並不是透過 openCompareView() 開啟的，
 // 所以 CompareView 的 pair 狀態是空的，導致所有同步相關事件都被忽略，要手動關閉再重開才會恢復正常。
 // 掃描目前所有可見分頁，找出剛好同時開著某一章節原文＋譯文的情況，直接登記成目前的比對配對。

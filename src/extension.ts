@@ -52,6 +52,7 @@ import { SidebarSectionStateStore } from "./core/sidebarStateStore";
 import { jumpToNextUntranslated } from "./translation/jumpCommands";
 import { ProgressService } from "./translation/progressService";
 import { ProgressStatusBar } from "./translation/progressStatusBar";
+import { SearchPanel } from "./search/searchPanel";
 
 export function activate(context: vscode.ExtensionContext) {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -226,6 +227,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand("novelTranslate.jumpToNextUntranslated", () =>
       safeRun(jumpToNextUntranslated(compareView), "跳到下一個未翻譯行")
+    ),
+
+    vscode.commands.registerCommand("novelTranslate.searchAllWorks", () =>
+      SearchPanel.createOrShow(projectStore, compareView)
     ),
 
     vscode.commands.registerCommand("novelTranslate.toggleScrollSync", () => scrollSyncExtension.toggle()),

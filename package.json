@@ -129,6 +129,12 @@
         "category": "小說翻譯"
       },
       {
+        "command": "novelTranslate.searchAllWorks",
+        "title": "小說翻譯：全作品搜尋",
+        "category": "小說翻譯",
+        "icon": "$(search)"
+      },
+      {
         "command": "novelTranslate.refreshGlossary",
         "title": "小說翻譯：重新整理詞彙表",
         "category": "小說翻譯",
@@ -229,6 +235,11 @@
       "view/title": [
         {
           "command": "novelTranslate.openWorkManager",
+          "when": "view == novelTranslate.works",
+          "group": "navigation"
+        },
+        {
+          "command": "novelTranslate.searchAllWorks",
           "when": "view == novelTranslate.works",
           "group": "navigation"
         },
